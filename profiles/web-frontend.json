@@ -1,0 +1,8 @@
+{
+  "name": "web-frontend",
+  "description": "Webフロントエンド開発向けスキルセット",
+  "skills": [
+    "code-review",
+    "git-conventional"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-02-18T12:38:54.279158+00:00",
+  "skills": [
+    {
+      "name": "code-review",
+      "dir": "code-review",
+      "description": "コードレビューを体系的に実施する。PRレビュー、コード品質チェック、 リファクタリング提案、ベストプラクティスの確認時に使用する。 「レビューして」「コードを見て」「品質チェック」などのリクエストで発動。",
+      "files": [
+        "SKILL.md"
+      ],
+      "tags": [
+        "coding",
+        "review",
+        "quality"
+      ]
+    },
+    {
+      "name": "flowchart-to-mermaid",
+      "dir": "flowchart-to-mermaid",
+      "description": "フローチャート画像を分析してMermaid記法に変換する。フローチャート、ダイアグラム、 フロー図、プロセス図、状態遷移図、シーケンス図などの画像からMermaid生成を依頼された 場合に使用する。「この図をMermaidにして」「フローチャートをコード化して」 「画像からダイアグラムを再現して」などのリクエストで発動。 画像処理スクリプトで前処理し、視認性を高めてから分析する。",
+      "files": [
+        "SKILL.md",
+        "references/mermaid-syntax.md",
+        "references/preprocessing-recipes.md",
+        "scripts/img_contrast.py",
+        "scripts/img_crop.py",
+        "scripts/img_erode.py",
+        "scripts/img_info.py",
+        "scripts/img_invert.py",
+        "scripts/img_resize.py",
+        "scripts/img_utils.py"
+      ],
+      "tags": [
+        "flowchart",
+        "mermaid",
+        "diagram",
+        "image-analysis",
+        "visualization"
+      ]
+    },
+    {
+      "name": "git-conventional",
+      "dir": "git-conventional",
+      "description": "Conventional Commits 規約に基づいたコミットメッセージを生成する。 コミット、git commit、コミットメッセージの作成・修正時に使用する。 変更内容からtype、scope、descriptionを自動判定する。",
+      "files": [
+        "SKILL.md"
+      ],
+      "tags": [
+        "git",
+        "commit",
+        "convention"
+      ]
+    }
+  ]
+}
