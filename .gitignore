@@ -8,6 +8,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Build
+cli/target/
+
 # Test artifacts
 test-project/
 __pycache__/

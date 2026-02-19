@@ -2,6 +2,7 @@
 name: {{SKILL_NAME}}
 description: >
   {{DESCRIPTION}}
+tags:
 ---
 
 # {{SKILL_NAME}}

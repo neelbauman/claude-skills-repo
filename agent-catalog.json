@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "generated_at": "2026-02-19T12:53:24.981489509+00:00",
+  "items": [
+    {
+      "name": "repo-researcher",
+      "file": "repo-researcher.md",
+      "description": "特定のリポジトリ（ローカル・GitHub）を調査して、実装の仕組みや使い方・APIを説明する専門エージェント。 以下のような依頼が来たときに使用する： - 「このライブラリはどう使う？」 - 「この関数の実装を調べて」 - 「このリポジトリのAPIを教えて」 - 「〇〇という機能はどこで実装されている？」 - 「このコードが何をしているか説明して」",
+      "tools": "Read, Grep, Glob, WebFetch, WebSearch",
+      "model": "claude-sonnet-4-6"
+    }
+  ]
+}
