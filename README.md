@@ -41,14 +41,48 @@
 - **Progressive Disclosure**: SKILL.md は軽量に、詳細は references/ に分離
 - **Portable**: Agent Skills 標準 (agentskills.io) 準拠
 
-## クイックスタート
+## インストール
 
-### ビルド
+### Linux / macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/neelbauman/claude-skills-repo/main/install.sh | bash
+```
+
+または、リポジトリをクローンしてローカルで実行:
+
+```bash
+git clone https://github.com/neelbauman/claude-skills-repo.git
+cd claude-skills-repo
+bash install.sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/neelbauman/claude-skills-repo/main/install.ps1 | iex
+```
+
+または、リポジトリをクローンしてローカルで実行:
+
+```powershell
+git clone https://github.com/neelbauman/claude-skills-repo.git
+cd claude-skills-repo
+.\install.ps1
+```
+
+### 手動ビルド
+
+Rust ツールチェーンがインストールされている場合、直接ビルドできます。
 
 ```bash
 cd cli && cargo build --release
 # バイナリ: cli/target/release/claude-registry
 ```
+
+> **Note**: インストールスクリプトは GitHub Releases から事前ビルド済みバイナリのダウンロードを試みます。利用できない場合は自動的にソースからビルドします（`cargo` と `git` が必要）。
+
+## クイックスタート
 
 ### スキル操作
 
@@ -162,6 +196,74 @@ claude-registry catalog build
 ```
 
 自分のプロジェクトに合わせたプロファイルを作って、チームで共有できます。
+
+## リリース手順（バイナリの公開方法）
+
+GitHub Releases にビルド済みバイナリを公開する手順です。
+
+### 1. バージョンタグを作成
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+### 2. 各プラットフォーム向けにビルド
+
+```bash
+cd cli
+
+# Linux x86_64
+cargo build --release --target x86_64-unknown-linux-gnu
+tar -czf claude-registry-linux-x86_64.tar.gz -C target/x86_64-unknown-linux-gnu/release claude-registry
+
+# Linux aarch64
+cargo build --release --target aarch64-unknown-linux-gnu
+tar -czf claude-registry-linux-aarch64.tar.gz -C target/aarch64-unknown-linux-gnu/release claude-registry
+
+# macOS x86_64
+cargo build --release --target x86_64-apple-darwin
+tar -czf claude-registry-darwin-x86_64.tar.gz -C target/x86_64-apple-darwin/release claude-registry
+
+# macOS aarch64 (Apple Silicon)
+cargo build --release --target aarch64-apple-darwin
+tar -czf claude-registry-darwin-aarch64.tar.gz -C target/aarch64-apple-darwin/release claude-registry
+
+# Windows x86_64
+cargo build --release --target x86_64-pc-windows-msvc
+# target/x86_64-pc-windows-msvc/release/claude-registry.exe を ZIP に圧縮
+```
+
+> **Tip**: クロスコンパイルには [`cross`](https://github.com/cross-rs/cross) が便利です。
+> `cargo install cross && cross build --release --target aarch64-unknown-linux-gnu`
+
+### 3. GitHub Releases にアップロード
+
+```bash
+gh release create v0.1.0 \
+  claude-registry-linux-x86_64.tar.gz \
+  claude-registry-linux-aarch64.tar.gz \
+  claude-registry-darwin-x86_64.tar.gz \
+  claude-registry-darwin-aarch64.tar.gz \
+  claude-registry-windows-x86_64.zip \
+  --title "v0.1.0" \
+  --notes "Initial release"
+```
+
+### アーカイブ命名規則
+
+インストールスクリプトは以下のファイル名を期待します:
+
+| Platform       | Architecture | ファイル名                                  |
+| -------------- | ------------ | ------------------------------------------- |
+| Linux          | x86_64       | `claude-registry-linux-x86_64.tar.gz`       |
+| Linux          | aarch64      | `claude-registry-linux-aarch64.tar.gz`      |
+| macOS          | x86_64       | `claude-registry-darwin-x86_64.tar.gz`      |
+| macOS          | aarch64      | `claude-registry-darwin-aarch64.tar.gz`     |
+| Windows        | x86_64       | `claude-registry-windows-x86_64.zip`        |
+| Windows        | aarch64      | `claude-registry-windows-aarch64.zip`       |
+
+アーカイブ内にはバイナリファイルを直接配置してください（サブディレクトリなし）。
 
 ## ライセンス
 
