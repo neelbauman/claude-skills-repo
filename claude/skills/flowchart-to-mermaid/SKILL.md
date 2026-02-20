@@ -6,7 +6,6 @@ description: >
   場合に使用する。「この図をMermaidにして」「フローチャートをコード化して」
   「画像からダイアグラムを再現して」などのリクエストで発動。
   画像処理スクリプトで前処理し、視認性を高めてから分析する。
-tags: flowchart, mermaid, diagram, image-analysis, visualization
 ---
 
 # Flowchart to Mermaid

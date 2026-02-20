@@ -10,3 +10,6 @@ serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
 walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

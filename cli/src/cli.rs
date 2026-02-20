@@ -30,6 +30,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: ProfileAction,
     },
+    /// Manage hooks
+    Hook {
+        #[command(subcommand)]
+        action: HookAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -108,6 +113,54 @@ pub enum AgentAction {
 pub enum CatalogAction {
     /// Build skill-catalog.json and agent-catalog.json
     Build,
+}
+
+#[derive(Subcommand)]
+pub enum HookAction {
+    /// Install a hook into settings.json
+    Install {
+        /// Hook name to install
+        name: String,
+        /// Install to ~/.claude/settings.json
+        #[arg(long, conflicts_with = "target")]
+        global: bool,
+        /// Install to <path>/.claude/settings.json
+        #[arg(long, conflicts_with = "global")]
+        target: Option<PathBuf>,
+        /// Preview without modifying
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Uninstall a hook from settings.json
+    Uninstall {
+        /// Hook name to uninstall
+        name: String,
+        /// Uninstall from ~/.claude/settings.json
+        #[arg(long, conflicts_with = "target")]
+        global: bool,
+        /// Uninstall from <path>/.claude/settings.json
+        #[arg(long, conflicts_with = "global")]
+        target: Option<PathBuf>,
+    },
+    /// List installed hooks
+    List {
+        /// List from ~/.claude/settings.json
+        #[arg(long, conflicts_with = "target")]
+        global: bool,
+        /// List from <path>/.claude/settings.json
+        #[arg(long, conflicts_with = "global")]
+        target: Option<PathBuf>,
+    },
+    /// Show available hooks in registry
+    Available,
+    /// Create a new hook from template
+    New {
+        /// Hook name
+        name: String,
+        /// Hook description
+        #[arg(long)]
+        description: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]

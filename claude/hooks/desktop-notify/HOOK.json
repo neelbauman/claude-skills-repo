@@ -1,0 +1,31 @@
+{
+  "name": "desktop-notify",
+  "description": "タスク完了・入力待ち時にデスクトップ通知を送る（Linux / notify-send 必須）",
+  "tags": "notification, linux",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send 'Claude' 'タスクが完了しました' --icon=dialog-information",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "notify-send 'Claude' '入力を待っています' --icon=dialog-question",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

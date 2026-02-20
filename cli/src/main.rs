@@ -15,5 +15,6 @@ fn main() -> anyhow::Result<()> {
         cli::Commands::Agent { action } => commands::agent::run(action),
         cli::Commands::Catalog { action } => commands::catalog::run(action),
         cli::Commands::Profile { action } => commands::profile::run(action),
+        cli::Commands::Hook { action } => commands::hook::run(action),
     }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "{{HOOK_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "tags": "",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'TODO: コマンドをここに記述'",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

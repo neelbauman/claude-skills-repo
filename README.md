@@ -18,20 +18,25 @@
 │    ├── repo-researcher.md ← エージェント定義      │
 │    └── ...                                        │
 │                                                   │
+│  claude/hooks/                                    │
+│    ├── desktop-notify/    ← フック定義            │
+│    └── ...                                        │
+│                                                   │
 │  profiles/                                        │
 │    ├── web-frontend.json  ← 用途別プリセット      │
 │    └── ...                                        │
 └──────────────┬───────────────────────────────────┘
                │ claude-registry install
                ▼
-┌──────────────────────────┐
-│  Target Project          │
-│  .claude/skills/         │
-│    ├── code-review/      │
-│    └── ...               │
-│  .claude/agents/         │
-│    └── repo-researcher.md│
-└──────────────────────────┘
+┌──────────────────────────────────────────┐
+│  Target Project / Global (~/.claude)     │
+│  .claude/skills/                         │
+│    ├── code-review/                      │
+│    └── ...                               │
+│  .claude/agents/                         │
+│    └── repo-researcher.md               │
+│  .claude/settings.json  ← フックをマージ │
+└──────────────────────────────────────────┘
 ```
 
 ## 設計原則
@@ -119,6 +124,33 @@ claude-registry agent install repo-researcher --target /path/to/project
 claude-registry agent uninstall repo-researcher --target /path/to/project
 ```
 
+### フック操作
+
+フックは `settings.json` にマージしてインストールします。スキルやエージェントとは異なり、ファイルコピーではなく JSON マージです。
+
+```bash
+# 利用可能なフック一覧
+claude-registry hook available
+
+# グローバル (~/.claude/settings.json) にインストール
+claude-registry hook install desktop-notify --global
+
+# プロジェクトの .claude/settings.json にインストール
+claude-registry hook install desktop-notify --target /path/to/project
+
+# dry-run（変更内容を確認するだけ）
+claude-registry hook install desktop-notify --global --dry-run
+
+# インストール済みフック一覧
+claude-registry hook list --global
+
+# アンインストール
+claude-registry hook uninstall desktop-notify --global
+
+# 新しいフックを作成
+claude-registry hook new my-hook --description "説明文"
+```
+
 ### プロファイル操作
 
 ```bash
@@ -147,8 +179,12 @@ claude-registry catalog build
 │   │       ├── scripts/
 │   │       ├── references/
 │   │       └── assets/
-│   └── agents/              # エージェント定義（1ファイル = 1エージェント）
-│       └── <agent-name>.md
+│   ├── agents/              # エージェント定義（1ファイル = 1エージェント）
+│   │   └── <agent-name>.md
+│   └── hooks/               # フック定義（settings.json にマージ）
+│       └── <hook-name>/
+│           ├── HOOK.json
+│           └── scripts/
 │
 ├── profiles/                # 用途別プリセット
 │   └── <profile-name>.json
@@ -159,7 +195,8 @@ claude-registry catalog build
 │
 ├── templates/               # 雛形テンプレート
 │   ├── SKILL.md.template
-│   └── AGENT.md.template
+│   ├── AGENT.md.template
+│   └── HOOK.json.template
 │
 ├── skill-catalog.json       # スキルカタログ（自動生成）
 ├── agent-catalog.json       # エージェントカタログ（自動生成）
@@ -181,6 +218,41 @@ claude-registry catalog build
 ```
 
 詳しくは [CONTRIBUTING.md](./CONTRIBUTING.md) を参照。
+
+## フックの作り方
+
+```bash
+# 雛形を生成
+claude-registry hook new my-hook --description "説明文"
+
+# claude/hooks/my-hook/HOOK.json を編集
+# グローバルにインストールして動作確認
+claude-registry hook install my-hook --global
+```
+
+### HOOK.json フォーマット
+
+```json
+{
+  "name": "my-hook",
+  "description": "フックの説明",
+  "tags": "notification, linux",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "notify-send 'Done'", "async": true }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- `hooks` フィールドは `settings.json` の `hooks` と同じ構造
+- インストール時に各グループへ `_registry_id` が自動付与され、アンインストール時に正確に除去される
+- 再インストールしても重複しない（冪等）
 
 ## プロファイルの仕組み
 

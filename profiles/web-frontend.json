@@ -1,6 +1,6 @@
 {
-  "name": "web-frontend",
-  "description": "Webフロントエンド開発向けスキルセット",
+  "name": "dev",
+  "description": "開発向けスキルセット",
   "skills": [
     "code-review",
     "git-conventional"
