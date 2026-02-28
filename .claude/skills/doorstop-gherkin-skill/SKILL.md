@@ -114,6 +114,12 @@ settings:
 
 ---
 
+## Spec-Weaverの使い方
+
+references/how-to-use-spec-weaver.md を参照。
+
+---
+
 ## 階層化・グループ化の自由度について
 
 DoorstopのREQ/SPECは**複数レベルの階層**を自由に設計してよい。機能領域やドメインに応じて柔軟に構成すること。
@@ -166,12 +172,6 @@ doorstop create PAY      ./specification/specs/payment --parent PAY-REQ
 
 ---
 
-## Spec-Weaverの使い方
-
-`references/how-to-use-spec-weaver.md` を参照。
-
----
-
 ## モード1: 新規プロジェクトのセットアップ
 
 ### セットアップ前の確認事項
@@ -183,7 +183,6 @@ doorstop create PAY      ./specification/specs/payment --parent PAY-REQ
 
 ```bash
 cd <project-root>
-# 例
 doorstop create REQ ./specification/reqs
 doorstop create SPEC ./specification/specs --parent REQ
 
@@ -254,6 +253,8 @@ doorstop add REQ  # 機能の数だけ繰り返す
 
 ---
 
+---
+
 ## 実装ステータスの管理
 
 Doorstop YAMLに `status` カスタム属性を追記することで、実装の進行状況を管理できる。
@@ -292,7 +293,6 @@ text: |
    # SPEC-001.yml の status を implemented に変更
    # （doorstop edit SPEC-001 でエディタを開くか、直接 YAML を編集）
    ```
-
    ```yaml
    status: implemented
    ```
@@ -329,5 +329,4 @@ spec-weaver status --filter deprecated
 | `references/yaml-templates.md` | REQ/SPEC YAMLの内容を編集するとき |
 | `references/gherkin-guide.md` | .featureファイルを作成・編集するとき |
 | `references/ci-integration.md` | GitHub ActionsやPre-commitの設定をするとき |
-| `references/how-to-use-doorstop.md` | Doorstopの使い方を確認する時 |
 | `references/how-to-use-spec-weaver.md` | DoorstopとGherkinの整合性を確認する時 |

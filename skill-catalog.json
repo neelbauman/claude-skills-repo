@@ -1,7 +1,17 @@
 {
   "version": "1.0.0",
-  "generated_at": "2026-02-19T12:53:24.981080914+00:00",
+  "generated_at": "2026-02-28T23:56:54.020508095+00:00",
   "items": [
+    {
+      "name": "bdd-behave-expert",
+      "dir": "bdd-behave-expert-skill",
+      "description": "Python 環境における BDD（Gherkin + behave）自動テスト実装を専門的に支援する コーディングエージェント向けスキル定義。 spec-weaver の trace 機能を前提とし、仕様・設計・実装を逆引きしながら 「あるべき振る舞い」をテストとして固定化する。 テストが現在の実装と乖離して失敗することは設計上正常であり歓迎される。 ユーザーが「behave」「BDDテスト」「Gherkin実装」「ステップ定義」「step定義」 「featureファイル実装」「behaveテスト」「受け入れテスト」を話題にした場合、 または既存のfeatureファイルに対応するステップ定義を書く場合は必ずこのスキルを使うこと。",
+      "files": [
+        "SKILL.md",
+        "references/behave-patterns.md",
+        "references/spec-weaver-trace-workflow.md"
+      ]
+    },
     {
       "name": "code-review",
       "dir": "code-review",
@@ -13,6 +23,29 @@
         "coding",
         "review",
         "quality"
+      ]
+    },
+    {
+      "name": "dev-lifecycle",
+      "dir": "dev-lifecycle-skill",
+      "description": "Doorstop + Gherkin + Spec-Weaver で仕様管理された開発ライフサイクル全体（分析→設計→計画→実装→検証・コミット）を統制するスキル。 実装計画をPLANドキュメントとしてDoorstopに永続化し、拡張ドキュメント階層（DESIGN/PLAN/ADR/RESEARCH）を管理する。 ユーザーが要件や仕様を伝えた場合、および開発に取り組む場合は必ずこのスキルを使うこと。 ユーザーが「開発」「実装」「設計」「ADR」「仕様」「要件」を話題にした場合もこのスキルをつかうこと。",
+      "files": [
+        "SKILL.md",
+        "references/commit-conventions.md",
+        "references/document-types.md",
+        "references/workflow-phases.md"
+      ]
+    },
+    {
+      "name": "doorstop-gherkin-spec",
+      "dir": "doorstop-gherkin-skill",
+      "description": "Doorstop（テキストベースの要件管理CLI）とGherkin（.feature形式の振る舞い仕様）、 およびそれらを繋ぐSpec-WeaverというCLIツールを組み合わせた、仕様管理プロセスのサポートスキル。 新規プロジェクトのDoorstop初期化・YAML作成・featureファイル生成から、要件・仕様・featuresの更新に伴う整合性更新、 既存プロジェクトのコードベース分析による仕様の逆引き初期化まで対応する。 ユーザーが「仕様管理」「仕様更新」「Doorstop」「Gherkin」「要件定義」「.feature」「BDD」 「受け入れ条件」「Spec-Weaver」「トレーサビリティ」を話題にした場合、 または既存プロジェクトに仕様管理を導入・整備したい場合は必ずこのスキルを使うこと。",
+      "files": [
+        "SKILL.md",
+        "references/ci-integration.md",
+        "references/gherkin-guide.md",
+        "references/how-to-use-spec-weaver.md",
+        "references/yaml-templates.md"
       ]
     },
     {
@@ -30,13 +63,6 @@
         "scripts/img_invert.py",
         "scripts/img_resize.py",
         "scripts/img_utils.py"
-      ],
-      "tags": [
-        "flowchart",
-        "mermaid",
-        "diagram",
-        "image-analysis",
-        "visualization"
       ]
     },
     {
