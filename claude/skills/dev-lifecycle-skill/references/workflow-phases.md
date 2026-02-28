@@ -1,10 +1,11 @@
 # ワークフローフェーズ 詳細リファレンス
 
-各フェーズの詳細な手順、チェックリスト、コマンド、テンプレートを記載する。
+各フェーズの詳細な手順とテンプレートを記載する。
+SKILL.md の各 Phase の補足資料として参照すること。
 
 ---
 
-## Phase 1: 分析
+## Phase 1: 分析（SKILL.md Phase 1 に対応）
 
 ### 目的
 
@@ -28,10 +29,10 @@
 # （Grep ツールで specification/ 配下を検索）
 
 # 関連するアイテムのトレーサビリティを確認
-spec-weaver trace <関連ID> -f ./specification/features
+uv run spec-weaver trace <関連ID> -f ./specification/features
 
 # 全体のステータスを確認
-spec-weaver status
+uv run spec-weaver status
 ```
 
 #### 1.3 コードベースの調査
@@ -44,9 +45,7 @@ spec-weaver status
 uv run pytest tests/ -q --collect-only
 ```
 
-#### 1.4 分析結果の報告
-
-以下のテンプレートで分析結果をユーザーに報告する:
+#### 1.4 分析結果の報告テンプレート
 
 ```markdown
 ## 分析結果
@@ -59,27 +58,20 @@ uv run pytest tests/ -q --collect-only
 - `src/xxx/yyy.py`: （影響内容）
 
 ### 必要な仕様変更
-- [ ] 新規 REQ の追加: （内容）
-- [ ] 新規 SPEC の追加: （内容）
-- [ ] 既存 SPEC-xxx の更新: （変更内容）
-- [ ] 新規 `.feature` の追加: （内容）
+- 新規 REQ の追加: （内容）
+- 新規 SPEC の追加: （内容）
+- 既存 SPEC-xxx の更新: （変更内容）
+- 新規 `.feature` の追加: （内容）
 
 ### リスク・懸念事項
 - （あれば記載）
 ```
 
-### チェックリスト
-
-- [ ] ユーザーの要求を正確に理解した
-- [ ] 関連する REQ / SPEC を全てリストアップした
-- [ ] 影響を受けるコードモジュールを特定した
-- [ ] 新規 REQ / SPEC の追加が必要かどうか判断した
-- [ ] 分析結果をユーザーに報告した
-- [ ] ユーザーから方向性の合意を得た
+### ⛔ STOP: 分析結果を報告し、ユーザーの承認を得ること。
 
 ---
 
-## Phase 2: 設計
+## Phase 2: 設計（SKILL.md Phase 2 に対応）
 
 ### 目的
 
@@ -102,7 +94,7 @@ doorstop link SPEC-xxx REQ-xxx
 doorstop edit SPEC-xxx
 ```
 
-カスタム属性（`status`, `created_at`, `updated_at`）の設定を忘れないこと。
+`status: draft` を設定すること。
 
 #### 2.2 設計ドキュメントの作成
 
@@ -126,11 +118,20 @@ doorstop link RESEARCH-xxx SPEC-xxx
 
 各ドキュメント型のテンプレートは `document-types.md` を参照。
 
-#### 2.3 `.feature` ファイルの方針決定
+#### 2.3 `.feature` ファイルの方針決定と記述
 
 - 新しい振る舞いには新しいシナリオが必要か
 - 既存のシナリオを更新する必要があるか
 - テスト不可能な仕様には `testable: false` を設定する
+
+`.feature` を実際に記述する場合は **bdd-behave-expert-skill の Gherkin 規則** に従うこと。
+
+主なルール（詳細は bdd-behave-expert-skill を参照）:
+- Feature タグに `@SPEC-xxx` を付与して Doorstop とリンクする
+- Rule キーワードでビジネスルールを明示する
+- 共通前提は `Background` に集約する
+- 複数データは `Scenario Outline + Examples` または `Data Table` で表現する
+- UI・API・DB の実装詳細を Gherkin に書かない（ドメイン用語を使う）
 
 #### 2.4 設計方針の提示
 
@@ -144,17 +145,11 @@ doorstop link RESEARCH-xxx SPEC-xxx
 | ADR | 複数の技術的選択肢がある場合 | 選択肢の比較、決定理由 |
 | RESEARCH | 未知の技術を使う場合 | 調査結果、PoC結果 |
 
-### チェックリスト
-
-- [ ] REQ / SPEC の新規追加・更新が完了した
-- [ ] カスタム属性（status, created_at, updated_at）を設定した
-- [ ] 必要な設計ドキュメントを作成した
-- [ ] `.feature` ファイルの更新方針を決定した
-- [ ] 設計方針についてユーザーの承認を得た
+### ⛔ STOP: 設計方針を提示し、ユーザーの承認を得ること。
 
 ---
 
-## Phase 3: 計画
+## Phase 3: 計画（SKILL.md Phase 3 に対応）
 
 ### 目的
 
@@ -192,17 +187,11 @@ PLAN の `text` フィールドに実装タスクを記述する（テンプレ�
 
 計画をユーザーに提示し、承認を得る。
 
-### チェックリスト
-
-- [ ] 実装タスクが具体的なステップに分解された
-- [ ] 各ステップの完了条件が明確である
-- [ ] タスクの依存関係と実行順序が整理された
-- [ ] 中〜大規模の場合は PLAN ドキュメントを作成した
-- [ ] ユーザーの承認を得た
+### ⛔ STOP: 実装計画を提示し、ユーザーの承認を得ること。
 
 ---
 
-## Phase 4: 実装
+## Phase 4: 実装（SKILL.md Phase 4 に対応）
 
 ### 目的
 
@@ -220,7 +209,8 @@ PLAN の `text` フィールドに実装タスクを記述する（テンプレ�
 
 - SPEC の `text` を更新する
 - 新しい振る舞いがあれば `.feature` にシナリオを追加する
-- `updated_at` を当日の日付に更新する
+
+> 注: `created_at` / `updated_at` は Git コミット履歴から自動算出されるため、手動更新は不要。
 
 #### 4.3 ステータスの更新
 
@@ -229,59 +219,140 @@ PLAN の `text` フィールドに実装タスクを記述する（テンプレ�
 # YAML を直接編集するか doorstop edit を使用
 ```
 
-#### 4.4 テストの実行
+#### 4.4 BDD ステップ定義の実装（`.feature` を追加・更新した場合）
+
+**bdd-behave-expert-skill の手順に従うこと。** 手順の概要:
+
+1. `scaffold` で雛形を生成する（手書きでゼロから書き始めてはならない）:
+   ```bash
+   uv run spec-weaver scaffold ./specification/features --out-dir features/steps
+   ```
+2. 生成された `raise NotImplementedError(...)` を仕様に従って肉付けする:
+   - Step は「委譲のみ」（`if` / `for` / ビジネスロジック禁止）
+   - 型付きパラメータ（`{count:d}` 等）を使う
+   - コメント・`# type: ignore`・docstring は削除しない
+3. `behave` を実行してシナリオを確認する（失敗は仕様と実装の乖離を示す）
+
+#### 4.5 テストの実行
 
 ```bash
 uv run pytest tests/ -q
+
+# .feature を追加・更新した場合は behave も実行する
+uv run behave
 ```
 
-### チェックリスト
-
-- [ ] 計画の全タスクが完了した
-- [ ] コードが正しく動作する（テスト通過）
-- [ ] 仕様（REQ / SPEC / `.feature`）がコードと同期している
-- [ ] 関連アイテムの `status` を更新した
-- [ ] `updated_at` を更新した
+> **注**: BDD テストが失敗することは設計上正常。仕様と実装の乖離を可視化するものであり、
+> テストを実装に合わせて歪めてはならない。
 
 ---
 
-## Phase 5: 検証・コミット
+## Phase 5: 波及確認（SKILL.md Phase 5 に対応）
+
+### 目的
+
+変更されたアイテムを起点に、関連する全てのアイテムが整合しているか精査する。
+実装中に見落とした不整合をこのフェーズで検出・修正することで、Phase 6 の検証をスムーズに通過させる。
+
+### 手順
+
+#### 5.1 変更アイテムのリストアップ
+
+今回のタスクで変更・追加した全アイテムを列挙する:
+
+- REQ（新規追加 / 更新したもの）
+- SPEC（新規追加 / 更新したもの）
+- `.feature` ファイル（新規追加 / 更新したもの）
+- DESIGN / PLAN / ADR / RESEARCH（該当するもの）
+- コードファイル（変更したモジュール）
+
+#### 5.2 トレーサビリティの走査
+
+変更した各アイテムについて、上位・下位の関連アイテムを `spec-weaver trace` で確認する:
+
+```bash
+# 変更した各IDについて実行
+uv run spec-weaver trace <変更したID> -f ./specification/features
+
+# 全体のステータス確認
+uv run spec-weaver status
+```
+
+#### 5.3 精査マトリクス
+
+以下の観点で各関連アイテムを精査し、不整合があれば更新すること:
+
+| 変更元 | 精査対象 | 確認すべきこと |
+|---|---|---|
+| REQ を変更 | 子 SPEC、`.feature`、DESIGN | SPEC の記述が REQ の変更を反映しているか。受け入れ条件が `.feature` と一致するか |
+| SPEC を変更 | 親 REQ、`.feature`、DESIGN、PLAN | シナリオが SPEC と一致しているか。DESIGN の設計方針と矛盾しないか |
+| `.feature` を変更 | 対応 SPEC、テストコード | SPEC の `testable` 属性・タグが正しいか。テストコードがシナリオを網羅しているか |
+| DESIGN を変更 | 親 SPEC、実装コード | コードが設計と一致しているか。SPEC の記述と矛盾しないか |
+| PLAN を変更 | 親 SPEC、実装コード | 計画と実装結果が一致しているか |
+| コードを変更 | 対応 SPEC、`.feature` | 仕様に記載のない振る舞いが増えていないか。既存シナリオが壊れていないか |
+
+#### 5.4 精査結果の報告
+
+精査の結果を以下の形式でユーザーに報告する:
+
+```markdown
+## 波及確認結果
+
+### 変更アイテム一覧
+- （変更したアイテムのリスト）
+
+### 精査結果
+- ✅ SPEC-xxx ↔ REQ-xxx: 整合OK
+- ⚠️ SPEC-yyy → feature: シナリオの更新が必要 → 更新済み
+- ✅ DESIGN-xxx ↔ コード: 整合OK
+
+### 追加で更新したアイテム
+- （波及確認により追加更新したもの、なければ「なし」）
+```
+
+### ⛔ STOP: 波及確認の結果を報告し、ユーザーの承認を得ること。
+
+---
+
+## Phase 6: 検証・コミット（SKILL.md Phase 6 に対応）
 
 ### 目的
 
 全ての整合性チェックを通過させ、変更をコミットする。
 
-### 手順
+### 必須コマンド（この順序で実行すること）
 
-#### 5.1 検証コマンドの実行
-
-以下の順序で実行する（前の検証が失敗した場合は修正してから次に進む）:
+前の検証が失敗した場合は修正してから次に進むこと。
 
 ```bash
-# Step 1: テスト実行
+# Step 1: ユニットテスト
 uv run pytest tests/ -q
 
-# Step 2: Spec-Weaver 監査
+# Step 2: BDD 受け入れテスト（失敗は仕様と実装の乖離を示す）
+uv run behave
+
+# Step 3: Spec-Weaver 監査
 uv run spec-weaver audit ./specification/features
 
-# Step 3: Doorstop バリデーション
+# Step 4: Doorstop バリデーション
 doorstop
 
-# Step 4: ドキュメント再生成（推奨）
+# Step 5: ドキュメント再生成
 uv run spec-weaver build ./specification/features --out-dir .specification
 ```
 
-#### 5.2 ステータスの最終更新
+### ステータスの最終更新
 
 ```bash
 # 完了した SPEC の status を implemented に変更
-# created_at / updated_at を確認・更新
 
 # 確認
-spec-weaver status
+uv run spec-weaver status
 ```
 
-#### 5.3 コミット
+> 注: `created_at` / `updated_at` は Git コミット履歴から自動算出されるため、手動更新は不要。
+
+### コミット
 
 コミット規約（`commit-conventions.md`）に従ってコミットする。
 
@@ -295,17 +366,9 @@ git commit -m "feat(SPEC-xxx): 変更の概要"
 | 検証 | よくある失敗原因 | 対処法 |
 |---|---|---|
 | pytest | テストロジックの不備 | テストコードを修正して再実行 |
+| behave | ステップ未定義 / 仕様と実装の乖離 | `spec-weaver scaffold` を再実行してステップ雛形を生成し、実装する（テストを弱めてはならない） |
 | spec-weaver audit | タグの不一致、未テスト仕様 | `.feature` のタグを修正、または `testable: false` を設定 |
 | doorstop | リンク切れ、未レビュー | `doorstop link` でリンク修正、`doorstop review all` |
-
-### チェックリスト
-
-- [ ] `pytest` が全て通過した
-- [ ] `spec-weaver audit` が exit code 0 を返した
-- [ ] `doorstop` バリデーションが通過した
-- [ ] 関連アイテムの `status` を `implemented` に更新した
-- [ ] `updated_at` を当日の日付に更新した
-- [ ] コミット規約に従ったメッセージでコミットした
 
 ---
 
@@ -317,9 +380,10 @@ git commit -m "feat(SPEC-xxx): 変更の概要"
 |---|---|---|
 | Phase 1 終了時 | **必須** | 分析結果と方向性の確認 |
 | Phase 2 終了時 | **必須** | 設計方針の承認 |
-| Phase 3 終了時 | 中〜大規模で**必須** | 実装計画の承認 |
+| Phase 3 終了時 | **必須** | 実装計画の承認 |
 | Phase 4 中 | 任意 | 想定外の問題が発生した場合 |
-| Phase 5 コミット前 | 任意 | コミット内容の最終確認 |
+| Phase 5 終了時 | **必須** | 波及確認の結果と追加更新内容の承認 |
+| Phase 6 コミット前 | 任意 | コミット内容の最終確認 |
 
 ### 承認の方法
 

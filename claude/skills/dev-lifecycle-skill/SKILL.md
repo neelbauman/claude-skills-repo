@@ -9,323 +9,253 @@ description: >
 
 # 開発ライフサイクル管理スキル
 
-## 概要
+## 絶対ルール
 
-このスキルは、Doorstop + Gherkin + Spec-Weaver で仕様管理されたプロジェクトにおいて、
-**開発ワークフロー全体の手順（When / What / Order）**を定義する。
-
-### doorstop-gherkin-skill との関係
-
-| スキル | 担当領域 | 問い |
-|---|---|---|
-| **doorstop-gherkin-skill** | 仕様管理の方法論 | How（YAMLの書き方、Gherkinの構文、Spec-Weaverの使い方） |
-| **dev-lifecycle（本スキル）** | 開発ワークフロー | When / What / Order（いつ・何を・どの順で行うか） |
-
-仕様の具体的な操作手順（YAML編集、`.feature` 作成、`doorstop` コマンド）は
-**doorstop-gherkin-skill に委譲**する。本スキルはそれらの操作を**いつ・どの順序で行うか**を定める。
+1. **MUST**: フェーズを飛ばしてはならない。Phase 1 → 2 → 3 → 4 → 5 → 6 の順に進むこと。
+2. **MUST**: 各フェーズ開始時に `## 🔷 Phase N: 名称` を出力すること。
+3. **MUST**: `⛔ STOP` マーカーではユーザー承認を待つこと。承認なしに次フェーズへ進んではならない。
+4. **MUST**: doorstop / spec-weaver コマンドを実行すること（省略禁止）。
+5. **MUST NOT**: Phase 2 を経ずにコードを書き始めてはならない（小規模バグ修正を除く）。
 
 ---
 
-## 拡張ドキュメント階層
+## フェーズ判定
 
-標準の REQ → SPEC 階層に加え、以下のドキュメント型を SPEC の下に配置できる。
-REQ-AUTHやAUTH-REQ, PAY-REQなど、標準のREQ -> SPEC以外にも要件や仕様が作成されていることがある。
+タスクを受け取ったら、まず開始フェーズを判定すること。
 
-```text
-REQ（ビジネス要件）
-└── SPEC（システム仕様）
-    ├── DESIGN（設計ドキュメント）   — アーキテクチャ・コンポーネント設計
-    ├── PLAN（実装計画）             — タスク分解・順序・見積り
-    ├── ADR（Architecture Decision Record） — 技術選定の記録
-    └── RESEARCH（調査メモ）         — 技術調査・PoC結果
-```
-
-| ドキュメント型 | Doorstop prefix | 親 | 用途 |
-|---|---|---|---|
-| DESIGN | `DESIGN` | SPEC | アーキテクチャ図、コンポーネント分解、インターフェース定義 |
-| PLAN | `PLAN` | SPEC | 実装タスクの分解・順序・依存関係 |
-| ADR | `ADR` | SPEC | 技術選定の理由・却下案・帰結の記録 |
-| RESEARCH | `RESEARCH` | SPEC | 技術調査、PoC結果、ベンチマーク |
-
-> 各型の詳細なテンプレートとセットアップ手順は `references/document-types.md` を参照。
-
----
-
-## ライフサイクル 5フェーズ
-
-```mermaid
-graph LR
-    P1[Phase 1<br/>分析] --> P2[Phase 2<br/>設計]
-    P2 --> P3[Phase 3<br/>計画]
-    P3 --> P4[Phase 4<br/>実装]
-    P4 --> P5[Phase 5<br/>検証・コミット]
-    P5 -.->|フィードバック| P1
-```
-
-| Phase | 名称 | 主な成果物 | 判定基準（次フェーズへの条件） |
-|---|---|---|---|
-| 1 | **分析** | 影響範囲の特定、既存仕様の確認 | 関連するREQ/SPECを全て把握した |
-| 2 | **設計** | DESIGN / ADR / RESEARCH ドキュメント | 設計方針が決定し、ユーザー承認を得た |
-| 3 | **計画** | PLAN ドキュメント（タスク分解） | 実装手順が明確で、ユーザー承認を得た |
-| 4 | **実装** | コード変更、REQ/SPEC/feature の更新 | 全タスク完了、テスト通過 |
-| 5 | **検証・コミット** | audit 通過、コミット | 全検証パス、コミット完了 |
-
-> 実際に行うときは、必ず `references/workflow-phases.md` を参照すること。
+| タスクの種類 | 開始フェーズ |
+|---|---|
+| 新機能 / 大きな変更 | **Phase 1** から開始 |
+| 小さなバグ修正（1〜2ファイル） | **Phase 4** から開始（Phase 5・6 は必須） |
+| 仕様の質問のみ | `spec-weaver trace` で調査して回答（フェーズ不要） |
 
 ---
 
 ## Phase 1: 分析
 
-**目的**: 変更の影響範囲を把握し、既存の仕様体系との関係を明確にする。
+出力: `## 🔷 Phase 1: 分析`
 
-### やること
+### 必須ステップ
 
-1. ユーザーの要求を理解する
-2. 既存の REQ / SPEC / `.feature` をスキャンし、関連アイテムを特定する
-3. コードベースを調査し、影響を受けるモジュールを特定する
-4. 分析結果をユーザーに報告する
+1. ユーザーの要求を正確に理解すること。不明点があれば質問すること。
+2. 以下のコマンドを実行し、関連する既存仕様を特定すること:
+   ```bash
+   uv run spec-weaver status
+   uv run spec-weaver trace <関連ID> -f ./specification/features
+   ```
+3. Grep / Glob / Read ツールで影響を受けるコードモジュールを特定すること。
+4. 分析結果を以下の形式でユーザーに報告すること:
+   - 関連する REQ / SPEC のリスト
+   - 影響を受けるモジュール
+   - 新規 REQ / SPEC / `.feature` の追加が必要か
+   - リスク・懸念事項
 
-### 主なコマンド
-
-```bash
-# 既存仕様の確認
-spec-weaver trace <関連ID> -f ./specification/features
-
-# ステータス確認
-spec-weaver status
-
-# コードベース調査
-# （Grep / Glob / Read ツールを使用）
-```
-
-### 判定基準
-
-- [ ] 関連する REQ / SPEC を全てリストアップした
-- [ ] 影響を受けるコードモジュールを特定した
-- [ ] 新規 REQ / SPEC の追加が必要かどうか判断した
-- [ ] 分析結果をユーザーに報告し、方向性の合意を得た
+### **⛔ STOP: 分析結果を報告し、ユーザーの承認を得ること。承認なしに Phase 2 へ進んではならない。**
 
 ---
 
 ## Phase 2: 設計
 
-**目的**: 実装方針を決定し、必要に応じて設計ドキュメントを作成する。
+出力: `## 🔷 Phase 2: 設計`
 
-### やること
+### 必須ステップ
 
-1. 新規/更新が必要な REQ / SPEC を doorstop-gherkin-skill の手順で作成・更新する
-2. 規模に応じて DESIGN / ADR / RESEARCH ドキュメントを作成する（後述の規模判定を参照）
-3. `.feature` ファイルの追加・更新が必要か判断する
-4. 設計方針をユーザーに提示し、承認を得る
+1. 新規/更新が必要な REQ / SPEC を **doorstop-gherkin-skill の手順で** 作成・更新すること:
+   ```bash
+   doorstop add REQ          # 新規REQ追加
+   doorstop add SPEC         # 新規SPEC追加
+   doorstop link SPEC-xxx REQ-xxx   # リンク設定
+   ```
+2. REQ / SPEC の YAML に `status: draft` を設定すること。
+3. 規模に応じて設計ドキュメントを作成すること（判定表を参照）:
 
-### 規模に応じたドキュメント作成判定
+   | 規模 | DESIGN | ADR | PLAN |
+   |---|---|---|---|
+   | 大規模（複数モジュール横断） | **必須** | 必要に応じて | **必須** |
+   | 中規模（単一モジュール内の大きな変更） | 推奨 | — | 推奨 |
+   | 小規模（数ファイルの変更） | — | — | 任意 |
 
-| 規模 | DESIGN | ADR | RESEARCH | PLAN |
-|---|---|---|---|---|
-| **大規模**（複数モジュール横断） | 必須 | 必要に応じて | 必要に応じて | 必須 |
-| **中規模**（単一モジュール内の大きな変更） | 推奨 | 必要に応じて | — | 推奨 |
-| **小規模**（数ファイルの変更） | — | — | — | 任意 |
-| **バグ修正** | — | — | — | — |
+4. `.feature` ファイルの追加・更新方針を決定し、**bdd-behave-expert-skill の Gherkin 規則に従って** Feature / Scenario を記述すること。
+5. 設計方針をユーザーに提示すること。
 
-### 判定基準
-
-- [ ] REQ / SPEC の新規追加・更新が完了した
-- [ ] 必要な設計ドキュメント（DESIGN / ADR / RESEARCH）を作成した
-- [ ] `.feature` ファイルの更新方針を決定した
-- [ ] 設計方針についてユーザーの承認を得た
+### **⛔ STOP: 設計方針を提示し、ユーザーの承認を得ること。承認なしに Phase 3 へ進んではならない。**
 
 ---
 
 ## Phase 3: 計画
 
-**目的**: 実装タスクを分解し、実行順序を明確にする。
+Plan Modeで立てた実装計画などをドキュメントとして保存する。
 
-### やること
+出力: `## 🔷 Phase 3: 計画`
 
-1. 実装タスクを具体的なステップに分解する
-2. 中〜大規模の場合は PLAN ドキュメントを Doorstop に作成する
-3. タスクの依存関係と実行順序を整理する
-4. 計画をユーザーに提示し、承認を得る
+### 必須ステップ
 
-### PLAN ドキュメントの活用（Plan-as-Spec）
+1. 実装タスクを具体的なステップに分解すること。各ステップは以下を満たすこと:
+   - 1つの論理的な変更単位である
+   - 完了条件が明確である
+   - 依存関係が明示されている
+2. 中〜大規模の場合、PLAN ドキュメントを Doorstop に作成すること:
+   ```bash
+   doorstop add PLAN
+   doorstop link PLAN-xxx SPEC-xxx
+   ```
+3. タスクの実行順序を整理すること（依存関係順 → リスク順 → テスト容易性）。
+4. 実装計画をユーザーに提示すること。
 
-実装計画を PLAN ドキュメントとして Doorstop に永続化することで：
-- 計画の変更履歴が Git で追跡される
-- SPEC との紐付けにより、なぜそのタスクが必要かが明確になる
-- 完了後も「どう実装したか」の記録として残る
-
-```bash
-# PLANドキュメントの作成（初回のみセットアップが必要）
-doorstop add PLAN
-doorstop link PLAN-001 SPEC-001
-```
-
-### 判定基準
-
-- [ ] 実装タスクが具体的なステップに分解された
-- [ ] タスクの実行順序と依存関係が明確になった
-- [ ] ユーザーの承認を得た
+### **⛔ STOP: 実装計画を提示し、ユーザーの承認を得ること。承認なしに Phase 4 へ進んではならない。**
 
 ---
 
 ## Phase 4: 実装
 
-**目的**: 計画に沿ってコードを変更し、仕様を同期させる。
+出力: `## 🔷 Phase 4: 実装`
 
-### やること
+### 必須ステップ
 
-1. 計画に沿ってコードを変更する
-2. 仕様の更新が必要な場合は doorstop-gherkin-skill の手順に従う
-3. `.feature` ファイルを追加・更新する
-4. 関連する REQ / SPEC の `status` を `in-progress` に更新する
-5. `updated_at` を更新する
+1. 計画に沿ってコードを変更すること。
+2. コード変更に伴い仕様が変わる場合は、**コードと同時に** SPEC / `.feature` を更新すること（doorstop-gherkin-skill の手順に従う）。
+3. `.feature` ファイルを追加・更新した場合は、**bdd-behave-expert-skill の手順で** ステップ定義を実装すること:
+   ```bash
+   # scaffold で雛形を生成（必須・手書き禁止）
+   uv run spec-weaver scaffold ./specification/features --out-dir features/steps
+   # 生成された雛形の NotImplementedError を仕様に従って肉付けする
+   ```
+4. 関連する REQ / SPEC の `status` を `in-progress` に更新すること。
+5. テストを実行し、確認すること:
+   ```bash
+   uv run pytest tests/ -q
+   uv run behave          # BDD シナリオの実行（失敗は仕様と実装の乖離を示すため正常）
+   ```
+5. 実装したファイルのパスを、対応する SPEC の YAML に `impl_files` カスタム属性としてリスト形式で記述すること:
+   ```yaml
+   impl_files:
+     - src/your_module.py
+     - src/another_module.py
+   ```
+   また、実装ファイルの先頭付近にアノテーションも記述すること:
+   ```python
+   # implements: SPEC-XXX
+   ```
+   > **注意**: Doorstop の `ref` フィールドは文字列専用のため、ファイルパスリストには必ず `impl_files` を使うこと。
+   >
+   > **検証方法**: `uv run spec-weaver audit --check-impl ./specification/features` で impl_files とアノテーションの乖離を確認できる。
 
-### 実装中の仕様同期ルール
+### 必須条件（Phase 5 へ進む前に全て満たすこと）
 
-- コードの変更に伴い SPEC の内容が変わる場合は、**コードと同時に SPEC も更新する**
-- 新しい振る舞いを追加した場合は、`.feature` のシナリオも追加する
-- 仕様の更新手順は doorstop-gherkin-skill に従う
-
-### 判定基準
-
-- [ ] 計画の全タスクが完了した
-- [ ] テストが通過する
-- [ ] 仕様（REQ / SPEC / `.feature`）がコードと同期している
+- 計画の全タスクが完了している
+- `pytest` テストが通過している
+- `.feature` を追加・更新した場合、対応するステップ定義が実装されている（`behave` 実行済み）
+- 実装ファイルが対応 SPEC の `impl_files` カスタム属性に記述されている
 
 ---
 
-## Phase 5: 検証・コミット
+## Phase 5: 波及確認
 
-**目的**: 全ての整合性チェックを通過させ、変更をコミットする。
+出力: `## 🔷 Phase 5: 波及確認`
 
-### やること
+**目的**: 変更されたアイテムを起点に、関連する全てのアイテム（REQ / SPEC / `.feature` / DESIGN / PLAN / コード）が整合しているか精査し、必要な更新を行う。
 
-1. テストを実行する
-2. Spec-Weaver の整合性チェックを実行する
-3. Doorstop のバリデーションを実行する
-4. 関連する REQ / SPEC の `status` を `implemented` に更新する
-5. コミット規約に従ってコミットする
+### 必須ステップ
 
-### 検証コマンドの実行順
+1. 今回変更した全アイテム（REQ / SPEC / `.feature` / DESIGN / PLAN / コード）をリストアップすること。
+2. 変更した各アイテムについて、`spec-weaver trace` で上位・下位の関連アイテムを洗い出すこと:
+   ```bash
+   uv run spec-weaver trace <変更したID> -f ./specification/features
+   ```
+3. 以下の観点で各関連アイテムを精査し、不整合があれば更新すること:
+
+   | 変更元 | 精査対象 | 確認すべきこと |
+   |---|---|---|
+   | REQ を変更 | 子 SPEC / `.feature` / DESIGN | SPEC の記述が REQ の変更を反映しているか |
+   | SPEC を変更 | 親 REQ / `.feature` / DESIGN / PLAN | `.feature` のシナリオが SPEC と一致しているか |
+   | `.feature` を変更 | 対応 SPEC / テストコード | SPEC の testable 属性やタグが正しいか |
+   | DESIGN を変更 | 親 SPEC / 実装コード | コードが設計と一致しているか |
+   | コードを変更 | 対応 SPEC / `.feature` | 仕様に記載のない振る舞いが増えていないか |
+
+4. 精査結果と更新内容をユーザーに報告すること。
+
+### **⛔ STOP: 波及確認の結果を報告し、ユーザーの承認を得ること。承認なしに Phase 6 へ進んではならない。**
+
+---
+
+## Phase 6: 検証・コミット
+
+出力: `## 🔷 Phase 6: 検証・コミット`
+
+### 必須コマンド（この順序で実行すること。失敗したら修正して再実行）
 
 ```bash
-# 1. ユニットテスト / 結合テスト
+# 1. ユニットテスト
 uv run pytest tests/ -q
 
-# 2. Spec-Weaver 監査（仕様 ↔ Gherkin の整合性）
+# 2. BDD 受け入れテスト（失敗は仕様と実装の乖離を示す）
+uv run behave
+
+# 3. Spec-Weaver 監査（仕様 ↔ Gherkin の整合性）
 uv run spec-weaver audit ./specification/features
 
-# 3. Doorstop バリデーション（リンク整合性）
+# 4. Doorstop バリデーション（リンク整合性）
 doorstop
 
-# 4. ドキュメント再生成（任意）
+# 5. ドキュメント再生成
 uv run spec-weaver build ./specification/features --out-dir .specification
 ```
 
-### コミット規約
+### 必須ステップ
 
-コミットメッセージは **Conventional Commits** 形式に従う。
-scope に仕様ID（SPEC-xxx, PLAN-xxx 等）を記載する。
-
-```
-feat(SPEC-001): パスワードハッシュ化ロジックを実装
-
-- bcrypt を使用したハッシュ化処理を追加
-- SPEC-001 の要件を満たすバリデーションを実装
-```
-
-> 詳細は `references/commit-conventions.md` を参照。
-
-### ステータス更新
-
-```bash
-# 完了した SPEC の status を implemented に更新
-# （doorstop edit SPEC-001 またはYAML直接編集）
-
-# 確認
-spec-weaver status
-```
-
-### 判定基準
-
-- [ ] 全テストが通過した
-- [ ] `spec-weaver audit` が exit code 0 を返した
-- [ ] `doorstop` バリデーションが通過した
-- [ ] 関連する REQ / SPEC の `status` を `implemented` に更新した
-- [ ] `updated_at` を更新した
-- [ ] コミット規約に従ったコミットメッセージで変更をコミットした
+1. 上記4つの検証コマンドを **全て** 実行し、通過を確認すること。
+2. 関連する REQ / SPEC の `status` を `implemented` に更新すること。
+3. ステータスを確認すること:
+   ```bash
+   uv run spec-weaver status
+   ```
+4. コミット規約（Conventional Commits）に従ってコミットすること。scope に仕様ID を記載すること:
+   ```
+   feat(SPEC-xxx): 変更の概要
+   ```
+   > 詳細は `references/commit-conventions.md` を参照。
 
 ---
 
-## Doorstop 拡張ドキュメントのセットアップ
+## 拡張ドキュメント階層
 
-拡張ドキュメント型（DESIGN / PLAN / ADR / RESEARCH）を使用する場合、
-プロジェクトで初回のみ以下のセットアップが必要。
+REQ → SPEC の下に以下のドキュメント型を配置できる。
 
+```
+REQ（ビジネス要件）
+└── SPEC（システム仕様）
+    ├── DESIGN（アーキテクチャ・コンポーネント設計）
+    ├── PLAN（実装タスク分解・順序）
+    ├── ADR（技術選定の記録）
+    └── RESEARCH（技術調査・PoC結果）
+```
+
+初回セットアップが必要な場合:
 ```bash
-# DESIGN ドキュメントの作成
 doorstop create DESIGN ./specification/designs --parent SPEC
-
-# PLAN ドキュメントの作成
 doorstop create PLAN ./specification/plans --parent SPEC
-
-# ADR ドキュメントの作成
 doorstop create ADR ./specification/adrs --parent SPEC
-
-# RESEARCH ドキュメントの作成
 doorstop create RESEARCH ./specification/research --parent SPEC
 ```
 
-セットアップ後、各ディレクトリの `.doorstop.yml` で `sep: '-'` を確認する。
-
-> 各ドキュメント型のテンプレートと使い分けは `references/document-types.md` を参照。
+> 各ドキュメント型の詳細は `references/document-types.md` を参照。
 
 ---
 
-## ワークフロー判定フローチャート
+## 他スキルとの役割分担
 
-ユーザーからタスクを受け取った際に、どのフェーズから開始するかを判定する。
+| 操作 | 担当スキル |
+|---|---|
+| REQ / SPEC の YAML 作成・編集、`.feature` 作成・編集、Spec-Weaver コマンドの使い方 | **doorstop-gherkin-skill** |
+| `.feature` の Gherkin 設計、`scaffold` 実行、ステップ定義の実装 | **bdd-behave-expert-skill** |
+| フェーズ進行管理、コミット規約、拡張ドキュメント管理 | **本スキル** |
 
-```mermaid
-flowchart TD
-    START[タスクを受け取る] --> Q1{タスクの種類は?}
+### bdd-behave-expert-skill を呼び出すタイミング
 
-    Q1 -->|バグ修正| BUG[影響範囲を確認]
-    Q1 -->|新機能 / 変更| ANALYZE[Phase 1: 分析]
-    Q1 -->|仕様の質問| TRACE[trace で調査して回答]
-
-    BUG --> Q2{修正範囲は広い?}
-    Q2 -->|はい| ANALYZE
-    Q2 -->|いいえ| IMPL[Phase 4: 実装]
-
-    ANALYZE --> Q3{設計判断が必要?}
-    Q3 -->|はい| DESIGN[Phase 2: 設計]
-    Q3 -->|いいえ| PLAN[Phase 3: 計画]
-
-    DESIGN --> PLAN
-    PLAN --> IMPL
-    IMPL --> VERIFY[Phase 5: 検証・コミット]
-```
-
-### 判定の指針
-
-- **即座に Phase 4 に進めるケース**: 1〜2ファイルの小さなバグ修正、typo修正
-- **Phase 1 から開始するケース**: 新機能の追加、既存機能の大幅な変更
-- **Phase 2 が必要なケース**: 技術選定が伴う、アーキテクチャに影響する変更
-- **Phase 3 が必要なケース**: 3つ以上のファイルを変更する、複数ステップが必要
-
----
-
-## 他スキルとの連携
-
-| 操作 | 担当スキル | 備考 |
-|---|---|---|
-| REQ / SPEC の YAML 作成・編集 | doorstop-gherkin-skill | `doorstop add` / `doorstop edit` の手順 |
-| `.feature` ファイルの作成・編集 | doorstop-gherkin-skill | Gherkin 構文、タグ付けルール |
-| Spec-Weaver コマンドの使い方 | doorstop-gherkin-skill | `audit` / `build` / `status` / `trace` |
-| 開発フェーズの進行管理 | **dev-lifecycle（本スキル）** | フェーズ判定、チェックリスト |
-| コミットメッセージの規約 | **dev-lifecycle（本スキル）** | Conventional Commits 形式 |
-| 拡張ドキュメントの管理 | **dev-lifecycle（本スキル）** | DESIGN / PLAN / ADR / RESEARCH |
+| フェーズ | 操作 |
+|---|---|
+| **Phase 2 (設計)** | `.feature` ファイルの新規作成・更新時、Gherkin 記述規則を適用する |
+| **Phase 4 (実装)** | `.feature` を追加・更新した後、`scaffold` でステップ雛形を生成し、ステップ定義を実装する |
 
 ---
 
@@ -333,6 +263,6 @@ flowchart TD
 
 | ファイル | 読むタイミング |
 |---|---|
-| `references/workflow-phases.md` | 各フェーズの詳細手順・チェックリストを確認するとき |
+| `references/workflow-phases.md` | 各フェーズの詳細手順を確認するとき |
 | `references/commit-conventions.md` | コミットメッセージを作成するとき |
 | `references/document-types.md` | DESIGN / PLAN / ADR / RESEARCH を作成するとき |

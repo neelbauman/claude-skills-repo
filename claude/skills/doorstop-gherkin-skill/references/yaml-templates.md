@@ -104,26 +104,19 @@ text: |
 
 > フィールド未設定の場合は `-` として扱われる（エラーにはならない）。
 
-**タイムスタンプ管理（カスタム属性）:**
+**タイムスタンプ管理（Git 自動取得）:**
 
-`doorstop add` でファイルを生成した後、`created_at` と `updated_at` キーを手動で追記することでアイテムの時系列情報を管理できる。
+`build` / `audit` 実行時に、Git コミット履歴からタイムスタンプを自動算出する。
+YAML への手動記入は不要。
 
-```yaml
-active: true
-status: in-progress
-created_at: '2026-01-15'   # ← 作成日（アイテム追加時に記入、以降変更しない）
-updated_at: '2026-02-20'   # ← 最終更新日（内容変更のたびに更新）
-text: |
-  （仕様本文）
-```
-
-| 属性 | 形式 | 運用ルール |
+| 属性 | 取得元 | 説明 |
 |---|---|---|
-| `created_at` | `YYYY-MM-DD` | アイテム作成時に当日の日付を記入。原則変更しない |
-| `updated_at` | `YYYY-MM-DD` | text・header・links 等を変更した際に当日の日付に更新 |
+| `created_at` | Git 初回コミット日 | ファイルが最初にコミットされた日付 |
+| `updated_at` | Git 最終コミット日 | ファイルが最後にコミットされた日付 |
 
-> フィールド未設定の場合は `-` として扱われる（エラーにはならない）。
-> `updated_at` が設定されていて90日以上更新がない場合、`audit --stale-days` で検出される。
+> Git 情報が取れない場合（未コミット、Git 管理外）は YAML の `created_at` / `updated_at` にフォールバック。
+> いずれもなければ `-` として扱われる（エラーにはならない）。
+> 最終コミット日から90日以上経過している場合、`audit --stale-days` で stale として検出される。
 
 **表示確認コマンド:**
 
@@ -198,8 +191,8 @@ text: |
 | `text` | 本文（Markdown） | 人間が直接編集するフィールド |
 | `testable` | テスト対象か | カスタム属性。`false` で audit 除外 |
 | `status` | 実装ステータス | カスタム属性。`draft` / `in-progress` / `implemented` / `deprecated` |
-| `created_at` | 作成日 | カスタム属性。ISO 8601 (`YYYY-MM-DD`)。アイテム作成時に記入 |
-| `updated_at` | 最終更新日 | カスタム属性。ISO 8601 (`YYYY-MM-DD`)。内容変更時に更新 |
+| `created_at` | 作成日 | Git 初回コミット日から自動取得。フォールバック: YAML カスタム属性 |
+| `updated_at` | 最終更新日 | Git 最終コミット日から自動取得。フォールバック: YAML カスタム属性 |
 
 ---
 
