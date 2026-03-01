@@ -1,0 +1,25 @@
+active: true
+derived: false
+header: |
+  completions サブコマンド
+level: 1.0
+links:
+- REQ001: UIjjRWacc5INgEwKH0pnER4NbU3-iH3bEPTShbRjFMg=
+normative: true
+ref: ''
+reviewed: LSnSP0ByZj5VcePGrd0hJ4M5EGtg1QnQUfsMLgAdlms=
+status: implemented
+impl_files:
+  - cli/src/cli.rs
+  - cli/src/commands/complete.rs
+  - completions/claude-registry.bash
+  - completions/_claude-registry
+  - install.sh
+text: |
+  補完スクリプトを bash-completion の自動検出ディレクトリに配置する方式とする。
+  install.sh がバイナリインストール後に補完スクリプトを以下に配置する:
+    bash: ~/.local/share/bash-completion/completions/claude-registry
+    zsh:  ~/.local/share/zsh/site-functions/_claude-registry
+  .bashrc / .zshrc は一切変更しない。
+  動的補完のため隠しサブコマンド `_complete <type>` を追加し、
+  補完スクリプトがこれを呼び出してスキル名等の候補を取得する。

@@ -68,6 +68,11 @@ install_from_release() {
   chmod +x "${INSTALL_DIR}/${BIN_NAME}"
 
   echo "Installed ${BIN_NAME} to ${INSTALL_DIR}/${BIN_NAME}"
+
+  # Install completions from the extracted archive
+  if [[ -d "${tmpdir}/completions" ]]; then
+    install_completions "$tmpdir"
+  fi
 }
 
 # ── Fallback: build from source ──────────────────────────────────
@@ -95,6 +100,33 @@ install_from_source() {
   chmod +x "${INSTALL_DIR}/${BIN_NAME}"
 
   echo "Installed ${BIN_NAME} to ${INSTALL_DIR}/${BIN_NAME}"
+
+  # Install completions from the cloned repo
+  install_completions "${tmpdir}/repo"
+}
+
+# ── Install shell completions ────────────────────────────────────
+# Accepts an optional argument: directory containing completions/
+install_completions() {
+  local search_dir="${1:-$(cd "$(dirname "$0")" && pwd)}"
+
+  # bash completion
+  local bash_comp_dir="${HOME}/.local/share/bash-completion/completions"
+  local bash_src="${search_dir}/completions/claude-registry.bash"
+  if [[ -f "$bash_src" ]]; then
+    mkdir -p "$bash_comp_dir"
+    cp "$bash_src" "${bash_comp_dir}/${BIN_NAME}"
+    echo "Installed bash completion to ${bash_comp_dir}/${BIN_NAME}"
+  fi
+
+  # zsh completion
+  local zsh_comp_dir="${HOME}/.local/share/zsh/site-functions"
+  local zsh_src="${search_dir}/completions/_claude-registry"
+  if [[ -f "$zsh_src" ]]; then
+    mkdir -p "$zsh_comp_dir"
+    cp "$zsh_src" "${zsh_comp_dir}/_${BIN_NAME}"
+    echo "Installed zsh completion to ${zsh_comp_dir}/_${BIN_NAME}"
+  fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────

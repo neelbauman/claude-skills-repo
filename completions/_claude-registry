@@ -1,0 +1,210 @@
+#compdef claude-registry
+# zsh completion for claude-registry
+# Install: copy to ~/.local/share/zsh/site-functions/_claude-registry
+#          (ensure that directory is in $fpath)
+
+_claude_registry_skills() {
+    local -a skills
+    skills=(${(f)"$(claude-registry _complete skills 2>/dev/null)"})
+    _describe 'skill' skills
+}
+
+_claude_registry_agents() {
+    local -a agents
+    agents=(${(f)"$(claude-registry _complete agents 2>/dev/null)"})
+    _describe 'agent' agents
+}
+
+_claude_registry_profiles() {
+    local -a profiles
+    profiles=(${(f)"$(claude-registry _complete profiles 2>/dev/null)"})
+    _describe 'profile' profiles
+}
+
+_claude_registry_hooks() {
+    local -a hooks
+    hooks=(${(f)"$(claude-registry _complete hooks 2>/dev/null)"})
+    _describe 'hook' hooks
+}
+
+_claude-registry() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1:command:->command' \
+        '*::arg:->args'
+
+    case $state in
+        command)
+            local -a commands=(
+                'skill:Manage skills'
+                'agent:Manage agents'
+                'catalog:Build catalogs'
+                'profile:Manage profiles'
+                'hook:Manage hooks'
+            )
+            _describe 'command' commands
+            ;;
+        args)
+            case $line[1] in
+                skill)
+                    _arguments -C \
+                        '1:action:->action' \
+                        '*::arg:->action_args'
+                    case $state in
+                        action)
+                            local -a actions=(
+                                'install:Install skills to a target project'
+                                'list:List installed skills'
+                                'new:Create a new skill from template'
+                                'available:Show available skills in registry'
+                                'uninstall:Uninstall a skill'
+                            )
+                            _describe 'action' actions
+                            ;;
+                        action_args)
+                            case $line[1] in
+                                install)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories' \
+                                        '--dry-run[Preview without copying]' \
+                                        '*:skill:_claude_registry_skills'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories'
+                                    ;;
+                                new)
+                                    _arguments \
+                                        '--description[Skill description]:description:'
+                                    ;;
+                                uninstall)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories' \
+                                        '1:skill:_claude_registry_skills'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                agent)
+                    _arguments -C \
+                        '1:action:->action' \
+                        '*::arg:->action_args'
+                    case $state in
+                        action)
+                            local -a actions=(
+                                'install:Install agents to a target project'
+                                'list:List installed agents'
+                                'available:Show available agents in registry'
+                                'uninstall:Uninstall an agent'
+                            )
+                            _describe 'action' actions
+                            ;;
+                        action_args)
+                            case $line[1] in
+                                install)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories' \
+                                        '--dry-run[Preview without copying]' \
+                                        '*:agent:_claude_registry_agents'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories'
+                                    ;;
+                                uninstall)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories' \
+                                        '1:agent:_claude_registry_agents'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                catalog)
+                    _arguments -C \
+                        '1:action:->action'
+                    case $state in
+                        action)
+                            local -a actions=(
+                                'build:Build skill-catalog.json and agent-catalog.json'
+                            )
+                            _describe 'action' actions
+                            ;;
+                    esac
+                    ;;
+                profile)
+                    _arguments -C \
+                        '1:action:->action' \
+                        '*::arg:->action_args'
+                    case $state in
+                        action)
+                            local -a actions=(
+                                'install:Install all skills and agents from a profile'
+                                'list:List available profiles'
+                            )
+                            _describe 'action' actions
+                            ;;
+                        action_args)
+                            case $line[1] in
+                                install)
+                                    _arguments \
+                                        '--target[Target project path]:path:_directories' \
+                                        '--dry-run[Preview without copying]' \
+                                        '1:profile:_claude_registry_profiles'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                hook)
+                    _arguments -C \
+                        '1:action:->action' \
+                        '*::arg:->action_args'
+                    case $state in
+                        action)
+                            local -a actions=(
+                                'install:Install a hook into settings.json'
+                                'uninstall:Uninstall a hook from settings.json'
+                                'list:List installed hooks'
+                                'available:Show available hooks in registry'
+                                'new:Create a new hook from template'
+                            )
+                            _describe 'action' actions
+                            ;;
+                        action_args)
+                            case $line[1] in
+                                install)
+                                    _arguments \
+                                        '--global[Install to ~/.claude/settings.json]' \
+                                        '--target[Install to path/.claude/settings.json]:path:_directories' \
+                                        '--dry-run[Preview without modifying]' \
+                                        '1:hook:_claude_registry_hooks'
+                                    ;;
+                                uninstall)
+                                    _arguments \
+                                        '--global[Uninstall from ~/.claude/settings.json]' \
+                                        '--target[Uninstall from path/.claude/settings.json]:path:_directories' \
+                                        '1:hook:_claude_registry_hooks'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '--global[List from ~/.claude/settings.json]' \
+                                        '--target[List from path/.claude/settings.json]:path:_directories'
+                                    ;;
+                                new)
+                                    _arguments \
+                                        '--description[Hook description]:description:'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_claude-registry "$@"

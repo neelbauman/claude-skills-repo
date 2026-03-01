@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -35,6 +35,20 @@ pub enum Commands {
         #[command(subcommand)]
         action: HookAction,
     },
+    /// Output completion candidates (hidden, used by shell completion scripts)
+    #[command(name = "_complete", hide = true)]
+    Complete {
+        /// Type of completion candidates to output
+        r#type: CompletionType,
+    },
+}
+
+#[derive(Clone, ValueEnum)]
+pub enum CompletionType {
+    Skills,
+    Agents,
+    Profiles,
+    Hooks,
 }
 
 #[derive(Subcommand)]

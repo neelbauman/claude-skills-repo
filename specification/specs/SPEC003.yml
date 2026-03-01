@@ -1,0 +1,21 @@
+active: true
+derived: false
+header: |
+  動的プロファイル名・フック名補完
+level: 1.2
+links:
+- REQ001: UIjjRWacc5INgEwKH0pnER4NbU3-iH3bEPTShbRjFMg=
+normative: true
+ref: ''
+reviewed: 3oKILRo5PZjlkD8lWx1NGXMiKtDtg8CTFZP26lQFb3M=
+status: implemented
+impl_files:
+  - cli/src/commands/complete.rs
+  - completions/claude-registry.bash
+  - completions/_claude-registry
+text: |
+  profile install コマンドの引数において、
+  レジストリに存在するプロファイル名をタブ補完で候補表示する。
+  プロファイル名は profiles/ ディレクトリの .json ファイルのステム名。
+  同様に hook install / hook uninstall でもフック名を補完する。
+  フック名は claude/hooks/ ディレクトリで HOOK.json を持つディレクトリ名。

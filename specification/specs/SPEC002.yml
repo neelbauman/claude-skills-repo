@@ -1,0 +1,21 @@
+active: true
+derived: false
+header: |
+  動的スキル名補完
+level: 1.1
+links:
+- REQ001: UIjjRWacc5INgEwKH0pnER4NbU3-iH3bEPTShbRjFMg=
+normative: true
+ref: ''
+reviewed: ygPD80nEApz6PIfOyIdMOQT7BNVFOWa_ZX1ZlOua1y8=
+status: implemented
+impl_files:
+  - cli/src/commands/complete.rs
+  - completions/claude-registry.bash
+  - completions/_claude-registry
+text: |
+  skill install / skill uninstall コマンドの引数において、
+  レジストリに存在するスキル名をタブ補完で候補表示する。
+  スキル名は CLAUDE_REGISTRY_ROOT（未設定時はカレントディレクトリ）の
+  claude/skills/ ディレクトリを走査して動的に取得する。
+  同様に agent install / agent uninstall でもエージェント名を補完する。

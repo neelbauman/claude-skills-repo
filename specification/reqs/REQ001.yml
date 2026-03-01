@@ -1,0 +1,15 @@
+active: true
+derived: false
+header: |
+  CLI タブ補完
+level: 1.0
+links: []
+normative: true
+ref: ''
+reviewed: UIjjRWacc5INgEwKH0pnER4NbU3-iH3bEPTShbRjFMg=
+status: implemented
+text: |
+  claude-registry CLI において、サブコマンド・フラグだけでなく、
+  スキル名・プロファイル名・エージェント名・フック名などの動的な値も
+  シェルのタブ補完で入力できるようにすること。
+  対応シェルは bash および zsh とする。

@@ -52,9 +52,16 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} --manifest-path cli/Cargo.toml
 
+      - name: Stage release files
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p _stage
+          cp cli/target/${{ matrix.target }}/release/claude-registry _stage/
+          cp -r completions _stage/
+
       - name: Package (tar.gz)
         if: runner.os != 'Windows'
-        run: tar -czf ${{ matrix.archive }} -C cli/target/${{ matrix.target }}/release claude-registry
+        run: tar -czf ${{ matrix.archive }} -C _stage claude-registry completions
 
       - name: Package (zip)
         if: runner.os == 'Windows'
