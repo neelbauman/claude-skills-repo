@@ -120,29 +120,69 @@ references/how-to-use-spec-weaver.md を参照。
 
 ---
 
-## 階層化・グループ化の自由度について
+## ドキュメント構造の設計指針
 
-DoorstopのREQ/SPECは**複数レベルの階層**を自由に設計してよい。機能領域やドメインに応じて柔軟に構成すること。
+**⚠️ REQ/SPECをフラットに追加し続けると、アイテムが増えるにつれて「関連する仕様のまとまり」が見えにくくなる。**
+グループ化戦略を事前に決めておくことが重要。
 
-### 階層化の例
+### サブドキュメント vs `level` フィールド — どちらを使うか
+
+| 手段 | 使うタイミング |
+|---|---|
+| **サブドキュメント**（別prefix） | ドメイン・機能領域が明確に分離している／1ドキュメントが10件超える |
+| **`level` フィールド** | 同一ドメイン内で小さなサブグループを作る／アイテムが10件以下 |
+
+#### `level` + `normative: false` で文書内セクションを作る方法
+
+```yaml
+# REQ-001.yml（セクション見出し）
+active: true
+level: 1.0          # .0 終わりがセクション
+normative: false    # false にするとヘッダー扱い
+header: '認証機能'
+text: ''
+
+# REQ-002.yml（実際の要件：認証グループ）
+active: true
+level: 1.1
+normative: true
+text: |
+  ユーザーはメールアドレスとパスワードでログインできること。
+
+# REQ-003.yml（別ドメインのセクション見出し）
+active: true
+level: 2.0
+normative: false
+header: '決済機能'
+text: ''
+```
+
+> `level` の `.0` 終わりアイテムを `normative: false` にすると、Doorstop はそれをセクション見出しとして扱う。
+> 同一ドキュメント内で複数のドメインを管理する際に有効。
+
+#### サブドキュメント構成（ドメインが明確に分かれる場合）
 
 ```bash
-# 機能グループ別にドキュメントを分ける
-doorstop create REQ      ./specification/reqs              # ルート要件
-doorstop create AUTH-REQ ./specification/reqs/auth --parent REQ    # 認証サブグループ
-doorstop create PAY-REQ  ./specification/reqs/payment --parent REQ # 決済サブグループ
+doorstop create REQ      ./specification/reqs              # ルート要件（横断的）
+doorstop create AUTH-REQ ./specification/reqs/auth --parent REQ    # 認証ドメイン
+doorstop create PAY-REQ  ./specification/reqs/payment --parent REQ # 決済ドメイン
 
-doorstop create SPEC     ./specification/specs             # ルート仕様
+doorstop create SPEC     ./specification/specs             # ルート仕様（横断的）
 doorstop create AUTH     ./specification/specs/auth --parent AUTH-REQ
 doorstop create PAY      ./specification/specs/payment --parent PAY-REQ
 ```
 
-### グループ化の設計指針
+#### 判断フロー
 
-- **ドメイン別**: 認証・決済・通知・ユーザー管理など機能ドメインで分ける
-- **レイヤー別**: API仕様・UI仕様・DB仕様など技術レイヤーで分ける
-- **フェーズ別**: MVP要件・拡張要件など開発フェーズで分ける
-- **`level` フィールド活用**: 同一ドキュメント内でも `level: 1.1`, `level: 1.2` で論理的なグルーピングができる
+```
+アイテムが増えてきた
+    ↓
+機能領域が明確に分かれる? → Yes → サブドキュメント（別prefix）を作成
+    ↓ No
+同一ドキュメントが10件超える? → Yes → level + normative:false でセクション化
+    ↓ No
+そのままフラットで管理
+```
 
 > **制約**: Doorstopの `--parent` は1つだけ指定可能（多重継承不可）。
 > 複数ドメインにまたがる仕様は、上位REQへのリンクを複数張ることで対応する（`doorstop link SPEC-001 REQ-002`）。
@@ -174,10 +214,39 @@ doorstop create PAY      ./specification/specs/payment --parent PAY-REQ
 
 ## モード1: 新規プロジェクトのセットアップ
 
-### セットアップ前の確認事項
+### Step 0: ドメイン設計（必須・Doorstop初期化より前に行う）
 
-- プロジェクトルートのパス（Gitリポジトリのルートか確認）
-- 主要な機能領域（例: 認証、決済、通知 など）
+Doorstopを初期化する前に、仕様の「ドメイン（機能領域）」を設計する。
+**この手順を省略すると、アイテムが無秩序に増殖し、後から再整理が困難になる。**
+
+#### ドメインの識別
+
+ユーザーと以下を確認する:
+- **主要機能領域**: 認証、決済、通知、ユーザー管理、在庫管理 など
+- **横断的要件**: 全ドメインに共通するREQ（パフォーマンス、セキュリティ方針 など）
+- **規模感の見積もり**: 各ドメインのアイテム数が5件以下か、それ以上か
+
+#### ドキュメント構造の決定
+
+| 状況 | 推奨構成 |
+|---|---|
+| 全体で5〜10件程度の小規模プロジェクト | REQ + SPEC のフラット構成 + `level` セクション化 |
+| 機能領域が2〜3つ、各10件以内 | ドメイン別サブドキュメント（AUTH-REQ/AUTH など） |
+| 機能領域が4つ以上 または 各領域が10件超える見込み | 必ずサブドキュメントで階層化 |
+
+#### ドメイン設計の出力（ユーザーに確認してから次へ）
+
+```text
+ドメイン設計:
+  横断: REQ（ルート）/ SPEC（ルート）
+  認証: AUTH-REQ / AUTH
+  決済: PAY-REQ  / PAY
+  通知: NTF-REQ  / NTF
+
+グループ化戦略:
+  小規模ドメインは level フィールドでセクション化
+  大規模ドメインはサブドキュメント化
+```
 
 ### Step 1: Doorstop初期化
 
