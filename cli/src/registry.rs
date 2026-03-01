@@ -1,13 +1,20 @@
+// implements: SPEC005
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 /// Resolve the registry root directory.
-/// Priority: CLAUDE_REGISTRY_ROOT env var > current directory.
+/// Priority: CLAUDE_REGISTRY_ROOT env var > ~/.local/share/claude-registry/ > current directory.
 pub fn resolve_root() -> Result<PathBuf> {
     if let Ok(root) = std::env::var("CLAUDE_REGISTRY_ROOT") {
         let p = PathBuf::from(root);
         if p.is_dir() {
             return Ok(p);
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        let installed = PathBuf::from(home).join(".local/share/claude-registry");
+        if installed.is_dir() {
+            return Ok(installed);
         }
     }
     std::env::current_dir().context("Failed to get current directory")
@@ -103,6 +110,50 @@ pub fn settings_path(global: bool, target: Option<&Path>) -> anyhow::Result<std:
         Ok(t.join(".claude").join("settings.json"))
     } else {
         anyhow::bail!("Either --global or --target must be specified")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn resolve_root_uses_installed_content_when_present() {
+        let tmp = TempDir::new().unwrap();
+        let installed = tmp.path().join(".local/share/claude-registry");
+        std::fs::create_dir_all(&installed).unwrap();
+
+        // Temporarily override HOME to point to our temp dir
+        std::env::remove_var("CLAUDE_REGISTRY_ROOT");
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", tmp.path());
+
+        let result = resolve_root().unwrap();
+        assert_eq!(result, installed);
+
+        // Restore
+        match original_home {
+            Some(h) => std::env::set_var("HOME", h),
+            None => std::env::remove_var("HOME"),
+        }
+    }
+
+    #[test]
+    fn resolve_root_env_var_takes_priority_over_installed() {
+        let tmp = TempDir::new().unwrap();
+        let installed = tmp.path().join(".local/share/claude-registry");
+        std::fs::create_dir_all(&installed).unwrap();
+        let custom = tmp.path().join("custom-registry");
+        std::fs::create_dir_all(&custom).unwrap();
+
+        std::env::set_var("CLAUDE_REGISTRY_ROOT", &custom);
+        std::env::set_var("HOME", tmp.path());
+
+        let result = resolve_root().unwrap();
+        assert_eq!(result, custom);
+
+        std::env::remove_var("CLAUDE_REGISTRY_ROOT");
     }
 }
 

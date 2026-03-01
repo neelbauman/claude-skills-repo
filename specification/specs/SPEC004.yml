@@ -1,0 +1,23 @@
+active: true
+derived: false
+header: |
+  コンテンツインストールパス
+level: 2.0
+links:
+- REQ002: ftKGe6puUSdTG_F4dEEyrGRCDzihNSP3PYalsLem8dM=
+normative: true
+ref: ''
+reviewed: IJaH-oh4TvLw_Ytyvd5cYjmKgtL2cBnh0UkkGD5OUeU=
+status: in-progress
+impl_files:
+  - install.sh
+text: |
+  install.sh（およびソースビルド時）は、コンテンツを以下のパスにインストールする:
+    Linux/macOS: ~/.local/share/claude-registry/
+  コンテンツディレクトリ構成:
+    ~/.local/share/claude-registry/claude/skills/
+    ~/.local/share/claude-registry/claude/agents/
+    ~/.local/share/claude-registry/claude/hooks/
+    ~/.local/share/claude-registry/profiles/
+  コンテンツのインストールは上書き方式とする。
+  ただし、ユーザーが手動で追加したコンテンツは削除しない（上書きのみ）。

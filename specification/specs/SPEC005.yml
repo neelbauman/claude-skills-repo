@@ -1,0 +1,20 @@
+active: true
+derived: false
+header: |
+  レジストリルート解決の優先順位
+level: 2.1
+links:
+- REQ002: ftKGe6puUSdTG_F4dEEyrGRCDzihNSP3PYalsLem8dM=
+normative: true
+ref: ''
+reviewed: wNzOGacEoiIagnRsKtnb3VRPMn5i2KwuBjHRVhJr4Fo=
+status: in-progress
+impl_files:
+  - cli/src/registry.rs
+text: |
+  claude-registry がコンテンツを探索する際のルートディレクトリ解決順序:
+    1. CLAUDE_REGISTRY_ROOT 環境変数（設定済みかつ存在するディレクトリ）
+    2. ~/.local/share/claude-registry/（インストール済みコンテンツ、存在する場合）
+    3. カレントディレクトリ（開発時フォールバック）
+  この順序は resolve_root() 関数で実装する。
+  2 のパスが存在しない場合はスキップして 3 に進む。

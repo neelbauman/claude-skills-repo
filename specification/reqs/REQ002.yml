@@ -1,0 +1,15 @@
+active: true
+derived: false
+header: |
+  コンテンツの同梱配布
+level: 2.0
+links: []
+normative: true
+ref: ''
+reviewed: ftKGe6puUSdTG_F4dEEyrGRCDzihNSP3PYalsLem8dM=
+status: draft
+text: |
+  claude-registry のインストール時に、バイナリと同時にスキル・エージェント・
+  フック・プロファイルなどのコンテンツも配布すること。
+  インストール後はどのディレクトリにいても claude-registry コマンドから
+  スキル・エージェント・フック・プロファイルを参照・インストールできること。

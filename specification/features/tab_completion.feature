@@ -1,4 +1,5 @@
 # linked: REQ001, SPEC001, SPEC002, SPEC003
+@REQ001
 Feature: CLI タブ補完
   claude-registry CLI でスキル名・プロファイル名などをタブ補完できる。
   補完スクリプトは bash-completion の自動検出ディレクトリに配置され、

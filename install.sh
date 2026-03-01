@@ -5,6 +5,7 @@ set -euo pipefail
 REPO="neelbauman/claude-skills-repo"                       # TODO: Replace with actual GitHub owner/repo
 BIN_NAME="claude-registry"
 INSTALL_DIR="${HOME}/.local/bin"
+CONTENT_DIR="${HOME}/.local/share/claude-registry"
 
 # ── OS / Architecture detection ─────────────────────────────────
 detect_platform() {
@@ -69,10 +70,11 @@ install_from_release() {
 
   echo "Installed ${BIN_NAME} to ${INSTALL_DIR}/${BIN_NAME}"
 
-  # Install completions from the extracted archive
+  # Install completions and content from the extracted archive
   if [[ -d "${tmpdir}/completions" ]]; then
     install_completions "$tmpdir"
   fi
+  install_content "$tmpdir"
 }
 
 # ── Fallback: build from source ──────────────────────────────────
@@ -101,8 +103,27 @@ install_from_source() {
 
   echo "Installed ${BIN_NAME} to ${INSTALL_DIR}/${BIN_NAME}"
 
-  # Install completions from the cloned repo
+  # Install completions and content from the cloned repo
   install_completions "${tmpdir}/repo"
+  install_content "${tmpdir}/repo"
+}
+
+# ── Install registry content ─────────────────────────────────────
+# Copies claude/ and profiles/ from the source directory to CONTENT_DIR.
+install_content() {
+  local search_dir="${1:-$(cd "$(dirname "$0")" && pwd)}"
+
+  mkdir -p "${CONTENT_DIR}"
+
+  if [[ -d "${search_dir}/claude" ]]; then
+    cp -r "${search_dir}/claude" "${CONTENT_DIR}/"
+    echo "Installed registry content to ${CONTENT_DIR}/claude"
+  fi
+
+  if [[ -d "${search_dir}/profiles" ]]; then
+    cp -r "${search_dir}/profiles" "${CONTENT_DIR}/"
+    echo "Installed profiles to ${CONTENT_DIR}/profiles"
+  fi
 }
 
 # ── Install shell completions ────────────────────────────────────

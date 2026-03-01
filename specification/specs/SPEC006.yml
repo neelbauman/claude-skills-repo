@@ -1,0 +1,25 @@
+active: true
+derived: false
+header: |
+  リリースアーティファクトへのコンテンツ同梱
+level: 2.2
+links:
+- REQ002: ftKGe6puUSdTG_F4dEEyrGRCDzihNSP3PYalsLem8dM=
+normative: true
+ref: ''
+reviewed: ZY9-btT6saSef5d29hpbOig1vFHUQ4vChLETyR2xV3c=
+status: in-progress
+impl_files:
+  - .github/workflows/release.yml
+text: |
+  GitHub Releases の tar.gz / zip アーティファクトに、バイナリと補完スクリプトに加え、
+  以下のコンテンツディレクトリを同梱する:
+    claude/    （スキル・エージェント・フックのコンテンツ）
+    profiles/  （プロファイル定義）
+  アーカイブ内のディレクトリ構造:
+    claude-registry          （バイナリ）
+    completions/             （補完スクリプト）
+    claude/skills/           （スキル群）
+    claude/agents/           （エージェント群）
+    claude/hooks/            （フック群）
+    profiles/                （プロファイル群）

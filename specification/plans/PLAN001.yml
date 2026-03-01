@@ -1,0 +1,29 @@
+active: true
+derived: false
+header: |
+  release.yml: コンテンツをアーティファクトに同梱
+level: 1.0
+links:
+- SPEC006: tTLuljWK7HYUtckAm63EZab85hrMkP1zbZfz1yWpFPc=
+normative: false
+ref: ''
+reviewed: q6_lIITJUnBQryOYRjUvpRCCir4YMRSWh4cPWvGjhJs=
+status: draft
+text: |
+  対象ファイル: .github/workflows/release.yml
+
+  [Linux/macOS] "Stage release files" ステップを変更:
+    現在: cp -r completions _stage/
+    変更後: claude/ と profiles/ も _stage/ へコピーする
+
+  [Linux/macOS] "Package (tar.gz)" ステップを変更:
+    現在: tar -czf ... -C _stage claude-registry completions
+    変更後: claude/ と profiles/ も tar のリストに追加する
+
+  [Windows] "Package (zip)" ステップを変更:
+    現在: claude-registry.exe のみを zip 化
+    変更後: _stage ディレクトリを作成し、exe + completions + claude/ + profiles/ を含める
+    ※ Windows ステップは現在 _stage を使っていないため、ステージング処理を追加
+
+  完了条件: release.yml が構文的に正しく、全プラットフォームで claude/ と profiles/ が
+  アーカイブに含まれる。

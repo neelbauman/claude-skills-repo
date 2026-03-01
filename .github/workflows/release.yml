@@ -58,15 +58,27 @@ jobs:
           mkdir -p _stage
           cp cli/target/${{ matrix.target }}/release/claude-registry _stage/
           cp -r completions _stage/
+          cp -r claude _stage/
+          cp -r profiles _stage/
 
       - name: Package (tar.gz)
         if: runner.os != 'Windows'
-        run: tar -czf ${{ matrix.archive }} -C _stage claude-registry completions
+        run: tar -czf ${{ matrix.archive }} -C _stage claude-registry completions claude profiles
+
+      - name: Stage release files (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path _stage
+          Copy-Item cli/target/${{ matrix.target }}/release/claude-registry.exe _stage/
+          Copy-Item -Recurse completions _stage/
+          Copy-Item -Recurse claude _stage/
+          Copy-Item -Recurse profiles _stage/
 
       - name: Package (zip)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path cli/target/${{ matrix.target }}/release/claude-registry.exe -DestinationPath ${{ matrix.archive }}
+        run: Compress-Archive -Path _stage/* -DestinationPath ${{ matrix.archive }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

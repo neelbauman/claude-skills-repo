@@ -1,0 +1,31 @@
+active: true
+derived: false
+header: |
+  install.sh: install_content() 関数を追加
+level: 1.1
+links:
+- SPEC004: 6ZHhvX8i1N-l-HkAq5-DDtGWvGFgRV6xV1cPZulBE7g=
+normative: false
+ref: ''
+reviewed: QjXcyrIqveZJklCgyIojwssIFoiGhLoypAsbgw59FFU=
+status: draft
+text: |
+  対象ファイル: install.sh
+
+  CONTENT_DIR 変数を定義:
+    CONTENT_DIR="${HOME}/.local/share/claude-registry"
+
+  install_content() 関数を新規追加:
+    引数: search_dir（アーカイブ展開先またはクローン済みリポジトリのルート）
+    処理:
+      mkdir -p "${CONTENT_DIR}"
+      claude/ ディレクトリが存在する場合: cp -r "${search_dir}/claude" "${CONTENT_DIR}/"
+      profiles/ ディレクトリが存在する場合: cp -r "${search_dir}/profiles" "${CONTENT_DIR}/"
+      インストール先を echo で表示する
+
+  install_from_release() 内で install_content "$tmpdir" を呼び出す
+    （completions と同じパターンで追加）
+
+  install_from_source() 内で install_content "${tmpdir}/repo" を呼び出す
+
+  完了条件: install.sh を実行後、CONTENT_DIR 以下に claude/ と profiles/ が存在する。

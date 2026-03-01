@@ -1,0 +1,33 @@
+active: true
+derived: false
+header: |
+  registry.rs: resolve_root() に優先順位2を追加
+level: 1.2
+links:
+- SPEC005: ayVRFZmTXu-fEc9F8pnSqmhhih0RUfc3Zlc86BnVuw8=
+normative: false
+ref: ''
+reviewed: -eQp4FCtZduIs0fO2yw8TI9aMopx5EBM4VdinKR0bLY=
+status: draft
+text: |
+  対象ファイル: cli/src/registry.rs
+
+  resolve_root() 関数を変更:
+    現在: CLAUDE_REGISTRY_ROOT → CWD
+    変更後:
+      1. CLAUDE_REGISTRY_ROOT（既存、変更なし）
+      2. home_dir().join(".local/share/claude-registry") が is_dir() なら返す
+      3. current_dir()（既存フォールバック）
+
+  home_dir() ヘルパー関数を追加:
+    std::env::var("HOME").map(PathBuf::from) を返す
+    （std::env::var("HOME") が取れない場合は優先順位2をスキップ）
+
+  コメント更新:
+    "Priority: CLAUDE_REGISTRY_ROOT > ~/.local/share/claude-registry/ > current directory."
+
+  テスト追加（cli/src/registry.rs の #[cfg(test)] 内）:
+    - HOME を一時ディレクトリに設定し、.local/share/claude-registry が存在する場合に
+      そのパスが返ることを確認するテスト
+
+  完了条件: cargo test が通過すること。

@@ -2,6 +2,12 @@ active: true
 derived: false
 header: |
   completions サブコマンド
+impl_files:
+- cli/src/cli.rs
+- cli/src/commands/complete.rs
+- completions/claude-registry.bash
+- completions/_claude-registry
+- install.sh
 level: 1.0
 links:
 - REQ001: UIjjRWacc5INgEwKH0pnER4NbU3-iH3bEPTShbRjFMg=
@@ -9,12 +15,6 @@ normative: true
 ref: ''
 reviewed: LSnSP0ByZj5VcePGrd0hJ4M5EGtg1QnQUfsMLgAdlms=
 status: implemented
-impl_files:
-  - cli/src/cli.rs
-  - cli/src/commands/complete.rs
-  - completions/claude-registry.bash
-  - completions/_claude-registry
-  - install.sh
 text: |
   補完スクリプトを bash-completion の自動検出ディレクトリに配置する方式とする。
   install.sh がバイナリインストール後に補完スクリプトを以下に配置する:
