@@ -198,6 +198,247 @@ doorstop
 
 ---
 
+## パターン3の実施手順（集約）
+
+### 3-A: ドキュメント集約（複数ドキュメントを1つに統合）
+
+別々のドキュメントに分散しているが、実態は同一ドメインである場合に統合する。
+
+**典型的なケース:**
+- `AUTH-REQ`（3件）と `OAUTH-REQ`（2件）が別々だが内容が密接に関連
+- マイクロサービス分割を想定して細かく作ったが、一体管理の方が見通しが良い
+- 担当チームが変わり、ドメイン境界を再整理する必要がある
+
+#### フェーズ1: 準備
+
+```bash
+# 統合元ドキュメントの全アイテムを確認
+find ./specification/reqs/oauth -name "*.yml" ! -name ".doorstop.yml"
+
+# 統合元アイテムを参照している SPEC を確認
+for id in OAUTH-REQ-001 OAUTH-REQ-002; do
+  echo "=== $id を参照する SPEC ==="
+  grep -rn "$id" ./specification/specs/
+done
+
+# 統合元アイテムを参照している feature タグを確認
+grep -rn "@OAUTH-REQ" ./specification/features/
+```
+
+#### フェーズ2: アイテムの移行
+
+```bash
+# 統合先ドキュメントに新アイテムを追加
+doorstop add AUTH-REQ   # → AUTH-REQ-004.yml 生成
+# OAUTH-REQ-001.yml の内容（text, status, header 等）をコピー
+
+doorstop add AUTH-REQ   # → AUTH-REQ-005.yml 生成
+# OAUTH-REQ-002.yml の内容をコピー
+```
+
+#### フェーズ3: 統合元アイテムの非アクティブ化
+
+```yaml
+# OAUTH-REQ-001.yml（統合元）
+active: false
+migrated_to: AUTH-REQ-004   # ← カスタム属性でトレーサビリティを保持
+status: deprecated
+```
+
+#### フェーズ4: リンクと feature タグの更新
+
+```bash
+# SPEC のリンクを張り直す
+# SPEC-xxx.yml の links: [OAUTH-REQ-001] → [AUTH-REQ-004] に変更
+doorstop link SPEC-xxx AUTH-REQ-004
+# YAML から OAUTH-REQ-001 を削除
+
+# feature タグを更新
+grep -rn "@OAUTH-REQ" ./specification/features/
+# @OAUTH-REQ-001 → @AUTH-REQ-004, @OAUTH-REQ-002 → @AUTH-REQ-005
+```
+
+#### フェーズ5: 空になったドキュメントの処理
+
+アイテムが全て非アクティブ化されたドキュメントは2つの選択肢がある:
+
+**選択肢A: そのまま残す（推奨）**
+`.doorstop.yml` は残し、active アイテムが 0 件の状態にする。
+Doorstop の警告は出るが、Git 履歴が保持される。
+
+**選択肢B: ドキュメントごと削除**
+```bash
+# 非アクティブアイテムを全て確認してから削除
+rm -rf ./specification/reqs/oauth/
+# Git 履歴には削除が記録される
+doorstop  # バリデーション（リンク切れがないか確認）
+```
+
+#### フェーズ6: 検証
+
+```bash
+doorstop && spec-weaver audit ./specification/features
+```
+
+---
+
+### 3-B: アイテム集約（複数アイテムを1つに統合）
+
+粒度が細かすぎる複数のアイテムを、1つの包括的なアイテムにまとめる。
+
+**典型的なケース:**
+- `SPEC-003`「ログインボタンを押す」と `SPEC-004`「ログイン処理が実行される」が1つのシナリオで表現できる
+- 実装してみたら複数 SPEC が同一コンポーネントを指していると判明した
+- 細かい SPEC が増えすぎて feature ファイルのタグが煩雑になった
+
+#### 手順
+
+```bash
+# Step 1: 統合先アイテムを特定（または新規作成）
+# 既存の SPEC-003 を残して SPEC-007 を統合する場合:
+
+# Step 2: 統合先の text を更新（両方の内容を包含する形で記述）
+# SPEC-003.yml の text を編集して SPEC-007 の内容も含める
+
+# Step 3: 統合元を非アクティブ化
+# SPEC-007.yml:
+#   active: false
+#   migrated_to: SPEC-003
+#   status: deprecated
+
+# Step 4: 統合元 SPEC-007 を参照するリンクを更新
+grep -rn "SPEC-007" ./specification/
+# 各ファイルの links から SPEC-007 を削除し、必要なら SPEC-003 を追加
+
+# Step 5: feature タグを更新
+grep -rn "@SPEC-007" ./specification/features/
+# @SPEC-007 を削除（SPEC-003 のシナリオに統合済みのため）
+
+# Step 6: バリデーション
+doorstop && spec-weaver audit ./specification/features
+```
+
+---
+
+## パターン4の実施手順（階層変更）
+
+Doorstop の親子関係は各ドキュメントの `.doorstop.yml` に記録されている。
+直接編集することで変更できる。
+
+```yaml
+# .doorstop.yml の構造
+settings:
+  digits: 3
+  parent: REQ      # ← この parent を変更する
+  prefix: NOTIFY-REQ
+  sep: '-'
+```
+
+### 4-A: 既存ドキュメントの親を変更
+
+**Before:**
+```
+REQ
+├── AUTH-REQ
+└── NOTIFY-REQ   ← REQ 直属だが、MESSAGING の下が適切
+```
+
+**After:**
+```
+REQ
+├── AUTH-REQ
+└── MESSAGING-REQ（新規）
+    └── NOTIFY-REQ
+```
+
+#### 手順
+
+```bash
+# Step 1: 中間ドキュメントが必要なら作成
+doorstop create MESSAGING-REQ ./specification/reqs/messaging --parent REQ
+# .doorstop.yml の sep: '-' を確認
+
+# Step 2: 移動するドキュメントの .doorstop.yml を編集
+# ./specification/reqs/notify/.doorstop.yml:
+# settings:
+#   parent: REQ          ← 変更前
+#   parent: MESSAGING-REQ  ← 変更後
+
+# Step 3: バリデーション
+doorstop
+
+# Step 4: 必要なら NOTIFY-REQ のアイテムのリンクも更新
+# （NOTIFY-REQ アイテムが REQ アイテムにリンクしている場合、
+#  MESSAGING-REQ アイテムにリンクし直すか検討する）
+```
+
+### 4-B: サブドキュメントをルートに昇格
+
+```bash
+# ./specification/reqs/auth/.doorstop.yml を編集:
+# settings:
+#   parent: REQ     ← 削除またはブランクにする
+#   parent: ''      ← ルートドキュメントになる
+
+doorstop  # バリデーション
+```
+
+> **注意**: ルートドキュメントが複数になる場合、Doorstop はそれぞれ独立したツリーとして扱う。
+> ルートは通常 1つにまとめることが推奨される。
+
+### 4-C: フラットな兄弟ドキュメントを階層化
+
+多くのドキュメントが同じ親を持つ「フラットな兄弟」構成を、
+中間層を挿入して階層化する。
+
+**Before:**
+```
+REQ
+├── AUTH-REQ
+├── OAUTH-REQ
+├── SESSION-REQ
+├── PAY-REQ
+├── INVOICE-REQ
+└── NOTIFY-REQ
+```
+
+**After:**
+```
+REQ
+├── IDENTITY-REQ（新規：認証系をまとめる）
+│   ├── AUTH-REQ
+│   ├── OAUTH-REQ
+│   └── SESSION-REQ
+├── PAYMENT-REQ（新規：決済系をまとめる）
+│   ├── PAY-REQ
+│   └── INVOICE-REQ
+└── NOTIFY-REQ
+```
+
+#### 手順
+
+```bash
+# Step 1: 中間ドキュメントを作成
+doorstop create IDENTITY-REQ ./specification/reqs/identity --parent REQ
+doorstop create PAYMENT-REQ  ./specification/reqs/payment-group --parent REQ
+
+# Step 2: 各子ドキュメントの parent を変更
+# ./specification/reqs/auth/.doorstop.yml: parent: IDENTITY-REQ
+# ./specification/reqs/oauth/.doorstop.yml: parent: IDENTITY-REQ
+# ./specification/reqs/session/.doorstop.yml: parent: IDENTITY-REQ
+# ./specification/reqs/pay/.doorstop.yml: parent: PAYMENT-REQ
+# ./specification/reqs/invoice/.doorstop.yml: parent: PAYMENT-REQ
+
+# Step 3: バリデーション
+doorstop
+
+# Step 4: 中間ドキュメントにアイテムを追加するか検討
+# IDENTITY-REQ にルートとなる横断的な要件アイテムを作成してもよい
+# （なくても構造上の問題はない）
+```
+
+---
+
 ## よくある問題と対処法
 
 ### 問題: `doorstop link` で "already linked" エラー
