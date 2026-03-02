@@ -12,7 +12,7 @@ Doorstop はアイテムの「移動」コマンドを持たない。
 **Before:**
 ```
 REQ/          # REQ-001〜REQ-020 がフラットに20件
-SPEC/         # SPEC-001〜SPEC-018 がフラットに18件
+SPEC/         # SPEC-001〜TRC-003 がフラットに18件
 ```
 
 **After:**
@@ -105,13 +105,13 @@ doorstop add AUTH-REQ
 # 旧リンクを削除してから新リンクを張る
 # （doorstop link は追加のみ。削除は YAML 直接編集）
 
-# SPEC-005.yml の links フィールドを確認
+# QA-001.yml の links フィールドを確認
 # links:
 # - REQ-002     ← この行を削除して
 # - AUTH-REQ-001  ← この行を追加
 
 # 新しいリンクを張る
-doorstop link SPEC-005 AUTH-REQ-001
+doorstop link QA-001 AUTH-REQ-001
 
 # バリデーションで確認
 doorstop
@@ -287,7 +287,7 @@ doorstop && spec-weaver audit ./specification/features
 粒度が細かすぎる複数のアイテムを、1つの包括的なアイテムにまとめる。
 
 **典型的なケース:**
-- `SPEC-003`「ログインボタンを押す」と `SPEC-004`「ログイン処理が実行される」が1つのシナリオで表現できる
+- `SPEC-003`「ログインボタンを押す」と `VIS-001`「ログイン処理が実行される」が1つのシナリオで表現できる
 - 実装してみたら複数 SPEC が同一コンポーネントを指していると判明した
 - 細かい SPEC が増えすぎて feature ファイルのタグが煩雑になった
 
@@ -295,24 +295,24 @@ doorstop && spec-weaver audit ./specification/features
 
 ```bash
 # Step 1: 統合先アイテムを特定（または新規作成）
-# 既存の SPEC-003 を残して SPEC-007 を統合する場合:
+# 既存の SPEC-003 を残して VIS-003 を統合する場合:
 
 # Step 2: 統合先の text を更新（両方の内容を包含する形で記述）
-# SPEC-003.yml の text を編集して SPEC-007 の内容も含める
+# SPEC-003.yml の text を編集して VIS-003 の内容も含める
 
 # Step 3: 統合元を非アクティブ化
-# SPEC-007.yml:
+# VIS-003.yml:
 #   active: false
 #   migrated_to: SPEC-003
 #   status: deprecated
 
-# Step 4: 統合元 SPEC-007 を参照するリンクを更新
-grep -rn "SPEC-007" ./specification/
-# 各ファイルの links から SPEC-007 を削除し、必要なら SPEC-003 を追加
+# Step 4: 統合元 VIS-003 を参照するリンクを更新
+grep -rn "VIS-003" ./specification/
+# 各ファイルの links から VIS-003 を削除し、必要なら SPEC-003 を追加
 
 # Step 5: feature タグを更新
-grep -rn "@SPEC-007" ./specification/features/
-# @SPEC-007 を削除（SPEC-003 のシナリオに統合済みのため）
+grep -rn "@VIS-003" ./specification/features/
+# @VIS-003 を削除（SPEC-003 のシナリオに統合済みのため）
 
 # Step 6: バリデーション
 doorstop && spec-weaver audit ./specification/features

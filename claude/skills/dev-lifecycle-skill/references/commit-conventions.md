@@ -67,7 +67,7 @@ refactor: 共通ユーティリティを分離
 feat(SPEC-001): 認証システムを実装
 
 - SPEC-001 パスワードハッシュ化
-- SPEC-002 セッション管理
+- CORE-001 セッション管理
 - REQ-001 の受け入れ基準を満たす
 ```
 
@@ -101,7 +101,7 @@ fix(SPEC-003): audit コマンドで testable:false のSPECが誤検出される
 spec(REQ-010): タイムスタンプ管理の要件を追加
 
 - created_at / updated_at のカスタム属性を定義
-- SPEC-011, SPEC-012, SPEC-013 の親要件として追加
+- VIS-006, VIS-007, QA-002 の親要件として追加
 ```
 - 仕様変更 → spec
 - body で関連仕様に言及
@@ -126,7 +126,7 @@ feat: いろいろ修正
 - feat なのに「修正」は矛盾、summary が曖昧
 
 ```
-feat(SPEC-001,SPEC-002,SPEC-003): 認証とセッションと監査を実装
+feat(SPEC-001,CORE-001,SPEC-003): 認証とセッションと監査を実装
 ```
 - scope に複数IDを詰め込みすぎ（1つに絞り、body で言及する）
 

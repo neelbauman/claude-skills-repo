@@ -300,7 +300,7 @@ uv run behave specification/features/
 uv run behave specification/features/checkout.feature
 
 # タグ指定で実行
-uv run behave --tags=SPEC-010 specification/features/
+uv run behave --tags=TRC-001 specification/features/
 
 # 詳細出力
 uv run behave --no-capture specification/features/

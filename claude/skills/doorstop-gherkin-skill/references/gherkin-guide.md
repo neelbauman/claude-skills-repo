@@ -30,7 +30,7 @@ Feature: ユーザー認証
 @SPEC-001                    # 単一SPECに対応
 Feature: ...
 
-@SPEC-002 @SPEC-003           # 複数SPECにまたがる場合
+@CORE-001 @SPEC-003           # 複数SPECにまたがる場合
 Feature: ...
 
 @SPEC-001

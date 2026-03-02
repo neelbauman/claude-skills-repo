@@ -97,18 +97,18 @@ grep -rA1 "^links:" ./specification/ | grep "links: \[\]"
 - `NOTIFY-REQ` の親が `REQ` だが、実態は `MESSAGING-REQ` の下が適切 → 階層変更を推奨
 
 #### 🟡 内容的問題（内容の修正が必要）
-- `SPEC-003`, `SPEC-007`: 類似した振る舞いを記述している（重複の可能性）
+- `SPEC-003`, `VIS-003`: 類似した振る舞いを記述している（重複の可能性）
 - `REQ-005`: text フィールドが空
 
 #### 🟢 鮮度・管理上の問題（軽微）
-- `SPEC-012`: status フィールドが未設定
+- `VIS-007`: status フィールドが未設定
 - `REQ-008`: active: false だがリンクが残っている
 
 ### 推奨アクション（優先順）
 1. REQ を機能領域別サブドキュメントに分割（→ モード2: 分割）
 2. OAUTH-REQ を AUTH-REQ に統合（→ モード2: 集約）
 3. NOTIFY-REQ の親を MESSAGING-REQ に変更（→ モード2: 階層変更）
-4. SPEC-015 のリンク切れを修正（→ モード3）
+4. AUT-001 のリンク切れを修正（→ モード3）
 ```
 
 ---
@@ -165,8 +165,8 @@ doorstop add AUTH-REQ   # → AUTH-REQ-001.yml 生成
 # 旧アイテムを active: false に設定
 
 # 3. SPEC のリンクを張り直す
-doorstop link SPEC-005 AUTH-REQ-001
-# SPEC-005.yml の links から旧 REQ-002 を削除
+doorstop link QA-001 AUTH-REQ-001
+# QA-001.yml の links から旧 REQ-002 を削除
 
 # 4. feature タグを更新
 # @REQ-002 → @AUTH-REQ-001
@@ -238,18 +238,18 @@ doorstop && spec-weaver audit ./specification/features
 
 ```bash
 # 1. 統合先アイテムに両方の内容を記述
-# SPEC-003.yml に SPEC-003 と SPEC-007 の内容を統合して記述
+# SPEC-003.yml に SPEC-003 と VIS-003 の内容を統合して記述
 
 # 2. 統合元アイテムを非アクティブ化
-# SPEC-007.yml: active: false, migrated_to: SPEC-003
+# VIS-003.yml: active: false, migrated_to: SPEC-003
 
-# 3. SPEC-007 を参照していたリンクを SPEC-003 に更新
-grep -rn "SPEC-007" ./specification/
+# 3. VIS-003 を参照していたリンクを SPEC-003 に更新
+grep -rn "VIS-003" ./specification/
 # 該当ファイルの links を SPEC-003 に変更
 
 # 4. feature タグを更新
-grep -rn "@SPEC-007" ./specification/features/
-# @SPEC-007 → @SPEC-003 に置換（または削除）
+grep -rn "@VIS-003" ./specification/features/
+# @VIS-003 → @SPEC-003 に置換（または削除）
 ```
 
 詳細は `references/reorganization-guide.md` の「パターン3: 集約」を参照。
@@ -356,17 +356,17 @@ git commit -m "refactor(spec): <操作の概要を記述>"
 
 ```bash
 # 正しい親 REQ-ID にリンクし直す
-doorstop link SPEC-015 REQ-010
+doorstop link AUT-001 REQ-010
 
 # 古いリンクを削除（YAML の links フィールドを直接編集）
-doorstop edit SPEC-015
+doorstop edit AUT-001
 ```
 
 #### 孤立アイテムへのリンク追加
 
 ```bash
 # リンクが未設定の SPEC を親 REQ に紐付ける
-doorstop link SPEC-007 REQ-003
+doorstop link VIS-003 REQ-003
 ```
 
 #### 廃止アイテムのクリーンアップ

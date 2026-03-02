@@ -8,6 +8,10 @@
 | `status` | 実装ステータスの一覧・フィルタリング表示 |
 | `build` | カバレッジ・テスト結果統合ドキュメントサイトの生成 |
 | `trace` | 任意アイテムを起点としたトレーサビリティツリー表示、`--show-impl` で実装ファイルも表示 |
+| `scaffold` | `.feature` ファイルから behave テストコードの雛形を生成・差分マージ |
+| `review` | `.feature` ファイルまたは Doorstop アイテムをレビュー済み状態にする |
+| `clear` | Doorstop YAML の gherkin_fingerprints を更新し Suspect 状態を解除 |
+| `semantic-review` | 仕様・Gherkin・実装コードの意味的整合性を Claude でレビュー |
 
 ---
 
@@ -56,14 +60,24 @@ spec-weaver audit ./features --prefix REQ
 
 ```
 ❌ テストが実装されていない仕様 (Untested Specs):
-  SPEC-002
+  CORE-001
 
 ⚠️ 仕様書に存在しない孤児タグ (Orphaned Tags):
   @SPEC-003
 
 ⚠️ レビューが必要なSuspect仕様:
-  SPEC-004  上位要件が変更されました。レビューが必要です。
+  VIS-001  上位要件が変更されました。レビューが必要です。
 ```
+
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--repo-root` | `-r` | カレント | Doorstopリポジトリのルート |
+| `--prefix` | `-p` | なし（全対象） | 監査対象とする仕様IDのプレフィックス |
+| `--stale-days` | | `90` | updated_at からの経過日数がこの値を超えたアイテムを stale として警告（0で無効） |
+| `--check-impl` | | 無効 | 実装ファイルリンクの検証を有効化 |
+| `--extensions` | | 全ファイル | アノテーションスキャン対象の拡張子（カンマ区切り、例: `py,ts`） |
 
 ### `--check-impl` オプション — 実装ファイルリンクの検証
 
@@ -75,16 +89,7 @@ spec-weaver audit ./specification/features --check-impl
 
 # 特定の拡張子のみスキャンする場合
 spec-weaver audit ./specification/features --check-impl --extensions py,ts
-
-# --extensions を省略すると全テキストファイルをスキャン
 ```
-
-**オプション:**
-
-| オプション | 説明 |
-|---|---|
-| `--check-impl` | 実装ファイルリンクの検証を有効化（デフォルト: 無効） |
-| `--extensions TEXT` | スキャン対象の拡張子をカンマ区切りで指定（例: `py,ts`）。未指定時は全テキストファイルを対象 |
 
 `--check-impl` 付きの出力例：
 
@@ -96,7 +101,7 @@ spec-weaver audit ./specification/features --check-impl --extensions py,ts
    SPEC-001 → src/spec_weaver/old_file.py (not found)
 
 ⚠️  impl_files のみ（アノテーションなし）:
-   SPEC-002 → src/spec_weaver/cli.py
+   CORE-001 → src/spec_weaver/cli.py
 
 ⚠️  アノテーションのみ（impl_files なし）:
    SPEC-003 ← src/spec_weaver/gherkin.py
@@ -133,6 +138,14 @@ spec-weaver status --filter in-progress
 spec-weaver status --filter draft
 ```
 
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--repo-root` | `-r` | カレント | Doorstopリポジトリのルート |
+| `--feature-dir` | `-f` | `specification/features` | `.feature` ファイルディレクトリ |
+| `--filter` | `-F` | なし（全表示） | 表示するステータスで絞り込む |
+
 ---
 
 ## 4. `build` コマンド — Living Documentationサイト生成
@@ -159,6 +172,15 @@ mkdocs serve -f .specification/mkdocs.yml
 | `items/REQ-001.md` | 要件詳細（関連仕様・兄弟要件・集計カバレッジ） |
 | `items/SPEC-001.md` | 仕様詳細（関連要件・兄弟仕様・シナリオリンク） |
 | `features/xxx.md` | `.feature` をブラウザで読めるMarkdownに変換したページ |
+
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--repo-root` | `-r` | カレント | Doorstopリポジトリのルート |
+| `--out-dir` | `-o` | `.specification` | ドキュメント出力先ディレクトリ |
+| `--prefix` | `-p` | `SPEC` | Gherkinタグとして主に扱うデフォルトプレフィックス |
+| `--test-results` | `-t` | なし | Cucumber互換JSONレポートのパス |
 
 **カバレッジバッジの見方:**
 
@@ -211,10 +233,10 @@ spec-weaver trace SPEC-003 --direction up    # 上位のみ（シナリオなし
 spec-weaver trace REQ-001 -f ./specification/features --format flat
 
 # 実装ファイルもツリーに表示（impl_files + アノテーション）
-spec-weaver trace SPEC-018 -f ./specification/features --show-impl
+spec-weaver trace TRC-003 -f ./specification/features --show-impl
 
 # 特定の拡張子のみスキャンする場合
-spec-weaver trace SPEC-018 -f ./specification/features --show-impl --extensions py,ts
+spec-weaver trace TRC-003 -f ./specification/features --show-impl --extensions py,ts
 ```
 
 **オプション:**
@@ -243,7 +265,7 @@ REQ-001 仕様と実装のトレーサビリティ保証 ✅ implemented
 ```
 ★ REQ-001 仕様と実装のトレーサビリティ保証 ✅ implemented
 ├── REQ-002 監査による品質の継続的担保 ✅ implemented
-│   ├── SPEC-002 データ抽出基盤 ✅ implemented
+│   ├── CORE-001 データ抽出基盤 ✅ implemented
 │   │   └── 🥒 data_extraction.feature
 │   │       └── Scenario: データ抽出基盤
 │   └── SPEC-003 audit コマンド仕様 ✅ implemented
@@ -252,11 +274,11 @@ REQ-001 仕様と実装のトレーサビリティ保証 ✅ implemented
 └── SPEC-001 コア・アーキテクチャ ✅ implemented
 ```
 
-**`--show-impl` 付きのツリー出力例（`SPEC-018` を起点）:**
+**`--show-impl` 付きのツリー出力例（`TRC-003` を起点）:**
 
 ```
 REQ-012 仕様アイテムと実装ファイルのリンク管理 ✅ implemented
-└── ★ SPEC-018 コードアノテーションスキャン ✅ implemented
+└── ★ TRC-003 コードアノテーションスキャン ✅ implemented
     ├── 🥒 impl_link.feature
     │   └── Scenario: アノテーションのスキャン
     ├── 📁 src/spec_weaver/impl_scanner.py
@@ -282,9 +304,148 @@ REQ-012 仕様アイテムと実装ファイルのリンク管理 ✅ implemente
 
 ---
 
+## 6. `scaffold` コマンド — behave テストコード雛形の生成
+
+`.feature` ファイルから behave テストコードの雛形を自動生成します。既存のステップ定義ファイルとの差分マージにも対応しています。
+
+```bash
+# 基本的な実行
+spec-weaver scaffold ./specification/features --out-dir tests/features
+
+# 既存ファイルを全上書きする場合
+spec-weaver scaffold ./specification/features --out-dir tests/features --overwrite
+
+# Git未コミット変更の確認をスキップして強制マージ
+spec-weaver scaffold ./specification/features --out-dir tests/features --force
+```
+
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--out-dir` | `-o` | `tests/features` | テストコード出力先ディレクトリ |
+| `--overwrite` | | 無効 | 既存ファイルを全上書きする |
+| `--repo-root` | `-r` | カレント | Git dirty チェック用リポジトリルート |
+| `--force` | | 無効 | Git 未コミット変更の確認をスキップして強制マージ |
+
+**生成されるファイル:**
+
+- `step_<feature_stem>.py` — 各 `.feature` に対応するステップ定義ファイル
+- 関数名はシナリオ名/ステップ文の SHA256 先頭8文字で生成（日本語対応）
+- 同一ステップは重複排除される
+
 ---
 
-## 6. 実装ファイルとのリンク管理（`impl_files` + アノテーション）
+## 7. `review` コマンド — レビュー済みマーク
+
+指定したアイテムをレビュー済み状態にします。対象に応じて動作が変わります。
+
+```bash
+# .feature ファイルのレビュー（フィンガープリント計算・書き込み）
+spec-weaver review specification/features/audit.feature
+
+# Doorstop アイテムID のレビュー（doorstop review を呼び出し）
+spec-weaver review SPEC-003
+
+# .yml ファイルを直接指定してレビュー
+spec-weaver review specification/specs/SPEC-003.yml
+```
+
+**対象別の動作:**
+
+| 対象 | 動作 |
+|---|---|
+| `.feature` ファイル | 構造ハッシュ（フィンガープリント）を計算し、ファイル先頭コメントに書き込む |
+| Doorstop アイテムID | `doorstop review` コマンドを呼び出してレビュー済みにする |
+| `.yml` ファイル | ファイル名からアイテムIDを取得し `doorstop review` を呼び出す |
+
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--feature-dir` | `-f` | `specification/features` | `.feature` ファイルディレクトリ |
+| `--repo-root` | `-r` | カレント | Doorstopリポジトリのルート |
+
+> **注意**: review 実行後に自動的に `audit` が実行され、現在の整合性状態が表示されます。
+
+---
+
+## 8. `clear` コマンド — Suspect 状態の解除
+
+Doorstop YAML の `gherkin_fingerprints` を現在の Gherkin ハッシュで更新し、Suspect 状態を解除します。
+
+```bash
+# アイテムIDを指定して解除
+spec-weaver clear SPEC-003 --feature-dir ./specification/features
+
+# .feature ファイルを指定して、ファイル内の全アイテムを一括解除
+spec-weaver clear specification/features/audit.feature --feature-dir ./specification/features
+```
+
+**前提条件:**
+- 対象アイテムが**レビュー済み**であること（未レビューの場合は先に `review` が必要）
+- 上位アイテムが未レビューの場合（`suspect-with-unreviewed` 状態）も clear 不可
+
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--feature-dir` | `-f` | `specification/features` | `.feature` ファイルディレクトリ |
+| `--repo-root` | `-r` | カレント | Doorstopリポジトリのルート |
+
+### review / clear のワークフロー
+
+仕様変更後の典型的なワークフロー：
+
+```
+1. 仕様変更 → .feature ファイルを修正
+2. spec-weaver review <feature_file>   → フィンガープリント更新
+3. spec-weaver clear <feature_file>    → Suspect 状態を解除
+4. spec-weaver audit <feature_dir>     → 整合性確認
+```
+
+---
+
+## 9. `semantic-review` コマンド — Claude による意味的レビュー
+
+仕様書（YAML）、Gherkin（`.feature`）、実装コードの意味的整合性を Claude で自動レビューします。
+
+```bash
+# 特定のアイテムをレビュー
+spec-weaver semantic-review --item SPEC-003
+
+# 全仕様アイテムを並列レビュー
+spec-weaver semantic-review --all
+
+# JSON形式で出力
+spec-weaver semantic-review --item SPEC-003 --output json
+
+# 重大度フィルタリング（medium以上のみ表示）
+spec-weaver semantic-review --item SPEC-003 --min-severity medium
+
+# high以上のfindingがあれば終了コード1を返す（CI連携）
+spec-weaver semantic-review --all --fail-on high
+```
+
+**オプション:**
+
+| オプション | 短縮 | デフォルト | 説明 |
+|---|---|---|---|
+| `--item` | `-i` | なし | レビュー対象のアイテムID（`--all` と排他） |
+| `--all` | | 無効 | 全仕様アイテムを並列レビュー（`--item` と排他） |
+| `--feature-dir` | `-f` | `specification/features` | `.feature` ファイル検索ディレクトリ |
+| `--repo-root` | `-r` | カレント | Doorstopリポジトリのルート |
+| `--output` | `-o` | `text` | 出力形式: `text`（Markdown） / `json` |
+| `--min-severity` | | `low` | 表示する finding の最低重大度: `low` / `medium` / `high` |
+| `--fail-on` | | なし | 指定重大度以上の finding があれば終了コード 1 を返す |
+| `--max-workers` | | `3` | `--all` 時の並列 Claude プロセス数 |
+| `--timeout` | | `300` | Claude プロセスの最大待機秒数 |
+
+> **注意**: このコマンドの実行には Claude API アクセスが必要です。
+
+---
+
+## 10. 実装ファイルとのリンク管理（`impl_files` + アノテーション）
 
 仕様アイテムと実装ファイルを双方向でリンクする仕組みです。2つのアプローチを組み合わせて使います。
 
@@ -293,7 +454,7 @@ REQ-012 仕様アイテムと実装ファイルのリンク管理 ✅ implemente
 DoorstopのYAMLに `impl_files` カスタム属性を追加し、実装ファイルパスのリストを記録します。
 
 ```yaml
-# SPEC-018.yml
+# TRC-003.yml
 active: true
 status: implemented
 impl_files:
@@ -316,16 +477,16 @@ text: |
 実装ファイルの先頭付近に `# implements:` アノテーションを記述します。
 
 ```python
-# implements: SPEC-018
-# implements: SPEC-018, SPEC-019   # 複数IDをカンマ区切りで列挙可能
+# implements: TRC-003
+# implements: TRC-003, QA-003   # 複数IDをカンマ区切りで列挙可能
 ```
 
 ```typescript
-// implements: SPEC-018
+// implements: TRC-003
 ```
 
 ```sql
--- implements: SPEC-018
+-- implements: TRC-003
 ```
 
 - `#`, `//`, `--` のコメント記号をサポートします
@@ -349,14 +510,14 @@ text: |
 
 ---
 
-## ⚙️ 高度な設定
+## 高度な設定
 
 ### テスト対象外の仕様
 
 Gherkinでの振る舞いテストが不可能な仕様は `testable: false` を追記して監査対象から除外します。
 
 ```yaml
-# SPEC-005.yml
+# QA-001.yml
 active: true
 testable: false
 text: |

@@ -160,7 +160,7 @@ text: |
 **Mermaidの記述:**
 
 ```yaml
-# SPEC-002.yml
+# CORE-001.yml
 active: true
 testable: true
 text: |
@@ -201,8 +201,8 @@ text: |
 ```bash
 # 新しい要件を追加してリンク
 doorstop add REQ          # REQ-002.yml 生成
-doorstop add SPEC         # SPEC-002.yml 生成
-doorstop link SPEC-002 REQ-002   # リンク設定
+doorstop add SPEC         # CORE-001.yml 生成
+doorstop link CORE-001 REQ-002   # リンク設定
 
 # アイテムを非アクティブ化（削除の代わり）
 # → YAML の active: false に変更（doorstop edit で）

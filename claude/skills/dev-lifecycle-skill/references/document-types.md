@@ -462,9 +462,9 @@ SPEC-xxx（既存仕様）
 # DESIGN-001 を SPEC-001 にリンク
 doorstop link DESIGN-001 SPEC-001
 
-# PLAN-001 を SPEC-001 と SPEC-002 にリンク（複数SPEC対応の計画）
+# PLAN-001 を SPEC-001 と CORE-001 にリンク（複数SPEC対応の計画）
 doorstop link PLAN-001 SPEC-001
-doorstop link PLAN-001 SPEC-002
+doorstop link PLAN-001 CORE-001
 
 # ADR-001 を SPEC-003 にリンク
 doorstop link ADR-001 SPEC-003
