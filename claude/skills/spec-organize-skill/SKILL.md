@@ -1,5 +1,5 @@
 ---
-name: doorstop-organize
+name: spec-organize
 description: >
   Doorstop + Gherkin 仕様管理のドキュメントレビューと再編スキル。
   増えたドキュメントが整合性をもって記述・配置されているかをチェックし、
