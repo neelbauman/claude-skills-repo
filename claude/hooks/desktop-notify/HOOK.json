@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "notify-send 'Claude' 'タスクが完了しました' --icon=dialog-information",
+            "command": "notify-send 'Claude' 'タスクが完了しました' --icon=dialog-information -t 5000 -r 1",
             "async": true
           }
         ]
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "notify-send 'Claude' '入力を待っています' --icon=dialog-question",
+            "command": "notify-send 'Claude' '入力を待っています' --icon=dialog-question -t 10000 -r 1",
             "async": true
           }
         ]

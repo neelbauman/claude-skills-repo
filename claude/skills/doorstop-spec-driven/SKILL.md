@@ -173,7 +173,7 @@ t.save()
 **ステップ9: 検証**
 
 ```bash
-python <skill-path>/scripts/validate_and_report.py <project-dir> --strict --json ./reports/validation.json
+uv run python <skill-path>/scripts/validate_and_report.py <project-dir> --strict --json ./reports/validation.json
 ```
 
 エラー0件・警告0件を目指す。問題があれば自律的に修正する。
@@ -220,7 +220,7 @@ python <skill-path>/scripts/validate_and_report.py <project-dir> --strict --json
 
 ```bash
 # 何が影響を受けるか事前に把握する
-python <skill-path>/scripts/impact_analysis.py <project-dir> \
+uv run python <skill-path>/scripts/impact_analysis.py <project-dir> \
   --changed <変更予定のUID> \
   --json ./reports/impact.json
 ```
@@ -270,8 +270,8 @@ item.save()
 **ステップ8-9: 検証と報告**
 
 ```bash
-python <skill-path>/scripts/validate_and_report.py <project-dir> --strict
-python <skill-path>/scripts/impact_analysis.py <project-dir> --detect-suspects
+uv run python <skill-path>/scripts/validate_and_report.py <project-dir> --strict
+uv run python <skill-path>/scripts/impact_analysis.py <project-dir> --detect-suspects
 ```
 
 suspect 0件を確認してから報告する。
@@ -319,11 +319,11 @@ suspect 0件を確認してから報告する。
 
 ```bash
 # トレーサビリティレポート
-python <skill-path>/scripts/validate_and_report.py <project-dir> \
+uv run python <skill-path>/scripts/validate_and_report.py <project-dir> \
   --output-dir ./reports --strict --json
 
 # 影響分析（suspectチェック）
-python <skill-path>/scripts/impact_analysis.py <project-dir> \
+uv run python <skill-path>/scripts/impact_analysis.py <project-dir> \
   --detect-suspects --json ./reports/impact.json
 ```
 
@@ -346,10 +346,10 @@ python <skill-path>/scripts/impact_analysis.py <project-dir> \
 
 ```bash
 # 1. バリデーション
-python <skill-path>/scripts/validate_and_report.py <project-dir> --strict --json ./reports/validation.json
+uv run python <skill-path>/scripts/validate_and_report.py <project-dir> --strict --json ./reports/validation.json
 
 # 2. suspect確認
-python <skill-path>/scripts/impact_analysis.py <project-dir> --detect-suspects --json ./reports/suspects.json
+uv run python <skill-path>/scripts/impact_analysis.py <project-dir> --detect-suspects --json ./reports/suspects.json
 
 # 3. テスト実行（プロジェクトのテストランナー）
 pytest  # or 適切なテストコマンド
