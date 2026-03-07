@@ -70,7 +70,7 @@ def item_to_dict(item, doc_prefix=None, tree=None):
         "group": get_group(item),
         "level": str(item.level),
         "ref": item.ref or "",
-        "links": [str(l) for l in item.links],
+        "links": [str(link) for link in item.links],
         "active": item.active,
         "reviewed": bool(item.reviewed),
     }

@@ -796,7 +796,7 @@ def write_local_json(tree, related_uids, label, output_path):
                 "group": get_group(item),
                 "text": item.text.strip(),
                 "ref": get_ref(item),
-                "links": [str(l) for l in item.links],
+                "links": [str(link) for link in item.links],
                 "reviewed": bool(item.reviewed),
             })
 

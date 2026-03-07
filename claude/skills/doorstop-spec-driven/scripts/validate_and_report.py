@@ -280,9 +280,12 @@ def compute_coverage(tree):
 
 
 def _color(pct):
-    if pct == 100: return "#4caf50"
-    elif pct >= 50: return "#ff9800"
-    else: return "#f44336"
+    if pct == 100:
+        return "#4caf50"
+    elif pct >= 50:
+        return "#ff9800"
+    else:
+        return "#f44336"
 
 
 def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
@@ -1012,7 +1015,7 @@ def main():
     )
     groups = sorted({get_group(item) for doc in tree for item in doc})
 
-    print(f"\n===== バリデーション結果 =====")
+    print("\n===== バリデーション結果 =====")
     print(f"ドキュメント: {', '.join(d.prefix for d in tree)}")
     print(f"総アイテム数: {total_items}")
     print(f"機能グループ: {', '.join(groups)}")

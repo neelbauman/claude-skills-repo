@@ -118,7 +118,7 @@ def detect_from_git(tree, project_dir, base_ref=None):
         result = subprocess.run(
             cmd, cwd=project_dir, capture_output=True, text=True, check=True
         )
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         # HEADが無い場合（初回コミット前）はstagedを使う
         result = subprocess.run(
             ["git", "diff", "--staged", "--name-only"],
@@ -308,7 +308,7 @@ def print_console(results, tree):
         return
 
     print(f"\n{'='*60}")
-    print(f"  変更影響分析レポート")
+    print("  変更影響分析レポート")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  変更アイテム: {len(results)}件")
     print(f"{'='*60}")
@@ -321,14 +321,14 @@ def print_console(results, tree):
             print(f"  ref: {r['ref']}")
 
         if r["upstream"]:
-            print(f"\n  [上流 ← なぜ変わった？]")
+            print("\n  [上流 ← なぜ変わった？]")
             for u in r["upstream"]:
                 indent = "    " + "  " * u["depth"]
                 print(f"{indent}← {u['uid']} [{u['group']}] ({u['prefix']})")
                 print(f"{indent}  {u['text']}")
 
         if r["downstream"] or r["suspect_children"]:
-            print(f"\n  [下流 → 何に影響する？]")
+            print("\n  [下流 → 何に影響する？]")
             for d in r["downstream"]:
                 indent = "    " + "  " * d["depth"]
                 suspect_mark = " ⚠ suspect" if d["uid"] in {s["uid"] for s in r["suspect_children"]} else ""
@@ -338,7 +338,7 @@ def print_console(results, tree):
                     print(f"{indent}  ref: {d['ref']}")
 
         if r["actions"]:
-            print(f"\n  [対応アクション]")
+            print("\n  [対応アクション]")
             for i, action in enumerate(r["actions"], 1):
                 print(f"    {i}. {action}")
 
@@ -352,7 +352,7 @@ def print_console(results, tree):
             group_impact[d["group"]]["affected"] += 1
 
     print(f"\n{'─'*60}")
-    print(f"[グループ別影響サマリ]")
+    print("[グループ別影響サマリ]")
     for g, data in sorted(group_impact.items()):
         print(f"  {g}: 変更={data['changed']}  suspect={data['suspect']}  影響={data['affected']}")
 
