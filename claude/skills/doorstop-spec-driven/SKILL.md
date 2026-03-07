@@ -30,6 +30,7 @@ description: >
 2. **テストを書いたらTSTを書く。** テストコードとTSTアイテムは常にペア
 3. **変更したらimpact_analysisを回す。** 変更の影響を把握してから修正に入る
 4. **バリデーションを最後に必ず実行する。** リンク漏れやカバレッジ低下を放置しない
+5. 仕様や要件が変更になったら、インタラクティブダッシュボード（REST API + SPA） `uv run python <skill-path>/scripts/validate_and_report.py <project-dir> --serve [--port 8080]` を起動し、レビューをすることをユーザーに促す。
 
 ## セットアップ
 
