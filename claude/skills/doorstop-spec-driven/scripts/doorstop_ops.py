@@ -45,9 +45,24 @@ def get_group(item):
         return None
 
 
-def item_to_dict(item, doc_prefix=None):
+def _is_suspect(item, tree):
+    """アイテムがsuspect状態かどうかを判定する。"""
+    for link in item.links:
+        parent = _find_item_safe(tree, str(link))
+        if parent is None:
+            continue
+        if (
+            link.stamp is not None
+            and link.stamp != ""
+            and link.stamp != parent.stamp()
+        ):
+            return True
+    return False
+
+
+def item_to_dict(item, doc_prefix=None, tree=None):
     """アイテムをdictに変換。"""
-    return {
+    d = {
         "uid": str(item.uid),
         "prefix": doc_prefix or str(item.uid).rstrip("0123456789"),
         "text": item.text.strip(),
@@ -57,8 +72,11 @@ def item_to_dict(item, doc_prefix=None):
         "ref": item.ref or "",
         "links": [str(l) for l in item.links],
         "active": item.active,
-        "reviewed": item.reviewed is not None and item.reviewed != "",
+        "reviewed": bool(item.reviewed),
     }
+    if tree is not None:
+        d["suspect"] = _is_suspect(item, tree)
+    return d
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +206,7 @@ def cmd_list(tree, args):
         for item in doc:
             if args.group and get_group(item) != args.group:
                 continue
-            items.append(item_to_dict(item, doc.prefix))
+            items.append(item_to_dict(item, doc.prefix, tree=tree))
 
     out({
         "ok": True,
@@ -246,7 +264,7 @@ def cmd_find(tree, args):
     for doc in tree:
         for item in doc:
             if query in item.text.lower() or (item.header and query in item.header.lower()):
-                results.append(item_to_dict(item, doc.prefix))
+                results.append(item_to_dict(item, doc.prefix, tree=tree))
 
     out({
         "ok": True,

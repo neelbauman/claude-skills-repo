@@ -26,6 +26,7 @@ description: >
 ## 鉄則
 
 1. **コードを書く前にSPECを書く。** 実装はSPECの具現化であり、SPECのないコードは書かない
+    1. ただし、実装はSPECにない力学でも構築されるので、逆に実装から仕様に反映されることもある
 2. **テストを書いたらTSTを書く。** テストコードとTSTアイテムは常にペア
 3. **変更したらimpact_analysisを回す。** 変更の影響を把握してから修正に入る
 4. **バリデーションを最後に必ず実行する。** リンク漏れやカバレッジ低下を放置しない
@@ -318,14 +319,33 @@ suspect 0件を確認してから報告する。
 ## [D] レポートフロー
 
 ```bash
-# トレーサビリティレポート
+# トレーサビリティレポート（全体）— 静的HTML+JSON生成
 uv run python <skill-path>/scripts/validate_and_report.py <project-dir> \
   --output-dir ./reports --strict --json
+
+# インタラクティブダッシュボード（REST API + SPA）
+# バックエンドでデータを一元管理し、Edit/Review/Clear が全ビューに即時反映される
+uv run python <skill-path>/scripts/validate_and_report.py <project-dir> --serve [--port 8080]
+# または直接起動:
+uv run python <skill-path>/scripts/serve_app.py <project-dir> [--port 8080] [--strict]
 
 # 影響分析（suspectチェック）
 uv run python <skill-path>/scripts/impact_analysis.py <project-dir> \
   --detect-suspects --json ./reports/impact.json
+
+# 局所トレーサビリティビュー（静的HTML生成）
+uv run python <skill-path>/scripts/local_trace_view.py <project-dir> --uid REQ001
+uv run python <skill-path>/scripts/local_trace_view.py <project-dir> --group CACHE
+uv run python <skill-path>/scripts/local_trace_view.py <project-dir> --all [--json]
 ```
+
+`--serve` モードでは REST API + SPA が起動し、ダッシュボード・マトリクス・
+グループビュー・アイテム詳細を動的に表示する。全データはバックエンドの
+DoorstopDataStore で一元管理され、Edit/Review/Clear 操作後は
+インデックスが自動再構築されるため、全ビューに即時反映される。
+
+静的レポートは `--output-dir`（デフォルト: `./reports`）に出力される。
+局所ビューは `./reports/local` に出力され、`--all` 時は `index.html` がインデックス。
 
 ユーザーへの報告は技術用語を避け、プレーンに:
 ```
@@ -394,6 +414,7 @@ groups = sorted({get_group(item) for doc in tree for item in doc})
 ## 操作リファレンス
 
 詳細なDoorstop APIやCLIの使い方は `references/doorstop_reference.md` を参照。
+Doorstopアイテムの記述の仕方は、`references/item_writing_guide.md` を参照。
 ライフサイクル全体の設計思想は `references/dev_lifecycle.md` を参照。
 
 ## エージェントの振る舞い規約

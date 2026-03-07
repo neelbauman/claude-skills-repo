@@ -23,6 +23,15 @@ except ImportError:
     print("ERROR: doorstop がインストールされていません。", file=sys.stderr)
     sys.exit(1)
 
+try:
+    import markdown as _md
+
+    def render_markdown(text):
+        return _md.markdown(text, extensions=["tables", "fenced_code"])
+except ImportError:
+    def render_markdown(text):
+        return f"<p>{html.escape(text)}</p>"
+
 
 def get_group(item):
     try:
@@ -37,6 +46,34 @@ def get_ref(item):
         return item.ref or ""
     except (AttributeError, KeyError):
         return ""
+
+
+def _find_item(tree, uid_str):
+    for doc in tree:
+        try:
+            return doc.find_item(uid_str)
+        except Exception:
+            continue
+    return None
+
+
+def detect_suspect_items(tree):
+    """suspectリンクを持つアイテムのUIDセットを返す。"""
+    suspect_uids = set()
+    for doc in tree:
+        for item in doc:
+            for link in item.links:
+                parent_item = _find_item(tree, str(link))
+                if parent_item is None:
+                    continue
+                if (
+                    link.stamp is not None
+                    and link.stamp != ""
+                    and link.stamp != parent_item.stamp()
+                ):
+                    suspect_uids.add(str(item.uid))
+                    break
+    return suspect_uids
 
 
 def validate_tree(tree, strict=False, project_dir="."):
@@ -133,7 +170,7 @@ def validate_tree(tree, strict=False, project_dir="."):
     unreviewed = []
     for document in tree:
         for item in document:
-            if item.reviewed is None or item.reviewed == "":
+            if not item.reviewed:
                 unreviewed.append(str(item.uid))
     if unreviewed:
         issues["info"].append(
@@ -249,11 +286,12 @@ def _color(pct):
 
 
 def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
-    """グループフィルタ+レビュー状態つきHTMLレポートを生成する。"""
+    """グループ・状態・IDフィルタ付きHTMLレポートを生成する。"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     h = html.escape
 
     all_groups = sorted({get_group(item) for doc in tree for item in doc})
+    suspect_uids = detect_suspect_items(tree)
 
     group_buttons = ''.join(
         f'<button class="group-btn" data-group="{h(g)}" onclick="toggleGroup(this)">{h(g)}</button>'
@@ -264,8 +302,9 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
     total_items = sum(len(list(d)) for d in tree)
     reviewed_items = sum(
         1 for d in tree for item in d
-        if item.reviewed is not None and item.reviewed != ""
+        if item.reviewed
     )
+    suspect_count = len(suspect_uids)
 
     # カバレッジテーブル
     coverage_rows = ""
@@ -313,26 +352,123 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
     matrix_rows = ""
     for row in matrix:
         group = h(row.get("_group", "(未分類)"))
+        row_uids = []
+        row_statuses = set()
         cells = f'<td><span class="group-tag">{group}</span></td>'
         for prefix in prefixes:
             item = row.get(prefix)
             if item:
+                uid_str = str(item.uid)
+                row_uids.append(uid_str)
                 text_preview = item.text[:80] + ("..." if len(item.text) > 80 else "")
                 ref = get_ref(item)
                 ref_html = f'<br><span class="ref-tag">{h(ref)}</span>' if ref else ""
-                # レビュー状態
-                rev = item.reviewed
-                rev_icon = "✓" if (rev is not None and rev != "") else "○"
-                rev_cls = "reviewed" if (rev is not None and rev != "") else "unreviewed"
+                # レビュー状態（suspect と reviewed/unreviewed は独立）
+                is_reviewed = bool(item.reviewed)
+                is_suspect = uid_str in suspect_uids
+                status_icons = ""
+                if is_suspect:
+                    status_icons += '<span class="suspect">⚠</span>'
+                    row_statuses.add("suspect")
+                if is_reviewed:
+                    status_icons += '<span class="reviewed">✓</span>'
+                    row_statuses.add("reviewed")
+                else:
+                    status_icons += '<span class="unreviewed">○</span>'
+                    row_statuses.add("unreviewed")
                 cells += (
-                    f'<td><strong>{h(str(item.uid))}</strong> '
-                    f'<span class="{rev_cls}">{rev_icon}</span>'
+                    f'<td><a href="#detail-{h(uid_str)}" style="text-decoration:none; color:inherit">'
+                    f'<strong>{h(uid_str)}</strong></a> '
+                    f'{status_icons}'
                     f'<br><span class="text-preview">{h(text_preview)}</span>'
                     f'{ref_html}</td>'
                 )
             else:
                 cells += '<td class="empty">—</td>'
-        matrix_rows += f'<tr data-group="{group}">{cells}</tr>'
+        uids_attr = h(" ".join(row_uids))
+        statuses_attr = h(" ".join(sorted(row_statuses)))
+        matrix_rows += (
+            f'<tr data-group="{group}" data-uids="{uids_attr}" '
+            f'data-statuses="{statuses_attr}">{cells}</tr>'
+        )
+
+    # 子リンクの逆引きマップを構築（親UID → 子UIDのリスト）
+    children_map = defaultdict(list)
+    for doc in tree:
+        for item in doc:
+            for link in item.links:
+                children_map[str(link)].append(str(item.uid))
+
+    # アイテム詳細セクション
+    item_detail_section = ""
+    for doc in tree:
+        for item in doc:
+            uid_str = str(item.uid)
+            is_suspect = uid_str in suspect_uids
+            is_reviewed = bool(item.reviewed)
+            status_badge = ""
+            if is_suspect:
+                status_badge += '<span class="suspect">⚠ Suspect</span> '
+            if is_reviewed:
+                status_badge += '<span class="reviewed">✓ レビュー済</span>'
+            else:
+                status_badge += '<span class="unreviewed">○ 未レビュー</span>'
+            ref = get_ref(item)
+            ref_line = f'<p><strong>ref:</strong> <span class="ref-tag">{h(ref)}</span></p>' if ref else ""
+            group = get_group(item)
+            parent_links = []
+            for link in item.links:
+                link_str = str(link)
+                parent_item = _find_item(tree, link_str)
+                if parent_item and not parent_item.reviewed:
+                    parent_links.append(
+                        f'<a href="#detail-{h(link_str)}" class="link-unreviewed">{h(link_str)}</a>'
+                        f' <span class="link-unreviewed-label">(\u672a\u30ec\u30d3\u30e5\u30fc)</span>'
+                    )
+                else:
+                    parent_links.append(
+                        f'<a href="#detail-{h(link_str)}">{h(link_str)}</a>'
+                    )
+            parents_str = ", ".join(parent_links) if parent_links else "\u2014"
+            child_uids = children_map.get(uid_str, [])
+            child_links = []
+            for c in sorted(child_uids):
+                if c in suspect_uids:
+                    child_links.append(
+                        f'<a href="#detail-{h(c)}" class="link-suspect">{h(c)}</a>'
+                        f' <span class="link-suspect-label">(suspect)</span>'
+                    )
+                else:
+                    child_links.append(
+                        f'<a href="#detail-{h(c)}">{h(c)}</a>'
+                    )
+            children_str = ", ".join(child_links) if child_links else "\u2014"
+            text_html = render_markdown(item.text)
+            raw_text = item.text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+            safe_group = group.replace("/", "_").replace(" ", "_").replace("(", "").replace(")", "")
+            local_view_href = f"local/trace_{safe_group}.html#detail-{uid_str}"
+            item_detail_section += f"""
+    <div class="item-detail" id="detail-{h(uid_str)}" data-group="{h(group)}">
+      <h3>{h(uid_str)} <span class="group-tag">{h(group)}</span> <span class="status-badge">{status_badge}</span>
+        <a class="local-view-link" href="{h(local_view_href)}">局所ビュー →</a>
+      </h3>
+      <div class="item-text" data-uid="{h(uid_str)}">{text_html}</div>
+      <div class="item-editor hidden" data-uid="{h(uid_str)}">
+        <textarea class="edit-textarea" data-uid="{h(uid_str)}">{raw_text}</textarea>
+        <div class="edit-actions">
+          <button class="action-btn save-btn" onclick="doSave('{h(uid_str)}')">保存</button>
+          <button class="action-btn cancel-btn" onclick="cancelEdit('{h(uid_str)}')">キャンセル</button>
+        </div>
+      </div>
+      {ref_line}
+      <p><strong>親:</strong> {parents_str}</p>
+      <p><strong>子:</strong> {children_str}</p>
+      <div class="item-actions" data-uid="{h(uid_str)}">
+        <button class="action-btn edit-btn" onclick="startEdit('{h(uid_str)}')">Edit</button>
+        <button class="action-btn review-btn" onclick="doReview('{h(uid_str)}')">Review</button>
+        <button class="action-btn clear-btn" onclick="doClear('{h(uid_str)}')">Clear</button>
+      </div>
+    </div>"""
 
     report_html = f"""<!DOCTYPE html>
 <html lang="ja">
@@ -357,6 +493,11 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
   .info {{ color: #1976d2; }}
   .reviewed {{ color: #4caf50; font-size: 0.8em; }}
   .unreviewed {{ color: #bdbdbd; font-size: 0.8em; }}
+  .suspect {{ color: #e65100; font-size: 0.8em; font-weight: bold; }}
+  .link-unreviewed {{ color: #9e9e9e; }}
+  .link-unreviewed-label {{ color: #9e9e9e; font-size: 0.8em; }}
+  .link-suspect {{ color: #e65100; }}
+  .link-suspect-label {{ color: #e65100; font-size: 0.8em; font-weight: bold; }}
   .summary {{ display: flex; gap: 15px; margin: 15px 0; flex-wrap: wrap; }}
   .card {{ background: #fff; border: 1px solid #ddd; border-radius: 8px;
            padding: 15px 20px; flex: 1; min-width: 100px; text-align: center; }}
@@ -365,14 +506,89 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
   .timestamp {{ color: #999; font-size: 0.85em; }}
   .group-tag {{ display: inline-block; background: #e3f2fd; color: #1565c0; padding: 2px 8px;
                 border-radius: 4px; font-size: 0.8em; font-weight: bold; }}
-  .group-filter {{ margin: 15px 0; }}
+  .filter-section {{ margin: 10px 0; }}
+  .filter-section label {{ font-weight: bold; color: #555; margin-right: 10px; font-size: 0.9em; }}
+  .group-filter {{ margin: 10px 0; }}
   .group-btn {{ margin: 3px; padding: 6px 14px; border: 1px solid #1a73e8; border-radius: 16px;
                 background: #fff; color: #1a73e8; cursor: pointer; font-size: 0.85em; }}
   .group-btn.active {{ background: #1a73e8; color: #fff; }}
   .group-btn:hover {{ background: #e3f2fd; }}
   .group-btn.active:hover {{ background: #1565c0; }}
+  .status-btn {{ margin: 3px; padding: 6px 14px; border: 1px solid #666; border-radius: 16px;
+                 background: #fff; cursor: pointer; font-size: 0.85em; }}
+  .status-btn[data-status="reviewed"] {{ color: #4caf50; border-color: #4caf50; }}
+  .status-btn[data-status="reviewed"].active {{ background: #4caf50; color: #fff; }}
+  .status-btn[data-status="unreviewed"] {{ color: #9e9e9e; border-color: #9e9e9e; }}
+  .status-btn[data-status="unreviewed"].active {{ background: #9e9e9e; color: #fff; }}
+  .status-btn[data-status="suspect"] {{ color: #e65100; border-color: #e65100; }}
+  .status-btn[data-status="suspect"].active {{ background: #e65100; color: #fff; }}
+  .status-btn:hover {{ opacity: 0.8; }}
+  .id-search {{ padding: 6px 12px; border: 1px solid #ccc; border-radius: 16px;
+                font-size: 0.85em; width: 220px; outline: none; }}
+  .id-search:focus {{ border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }}
   .coverage-group {{ font-size: 0.9em; }}
   tr.hidden {{ display: none; }}
+  #matrix-table a:hover strong {{ text-decoration: underline; }}
+  .item-detail {{ background: #fff; border: 1px solid #ddd; border-radius: 8px;
+                  padding: 15px 20px; margin: 10px 0; transition: border-color 0.3s, box-shadow 0.3s; }}
+  .item-detail:target, .item-detail.highlighted {{
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 3px rgba(26,115,232,0.2);
+    animation: highlightFade 2s ease forwards;
+  }}
+  @keyframes highlightFade {{
+    0% {{ background: #e3f2fd; }}
+    100% {{ background: #fff; }}
+  }}
+  .item-detail h3 {{ margin: 0 0 8px; font-size: 1.1em; }}
+  .item-detail p {{ margin: 5px 0; color: #333; }}
+  .item-detail a {{ color: #1a73e8; text-decoration: none; }}
+  .item-detail a:hover {{ text-decoration: underline; }}
+  .item-text {{ color: #333; line-height: 1.6; }}
+  .item-text p {{ margin: 6px 0; }}
+  .item-text code {{ background: #f5f5f5; padding: 1px 5px; border-radius: 3px;
+                     font-size: 0.9em; font-family: monospace; }}
+  .item-text pre {{ background: #f5f5f5; padding: 12px; border-radius: 6px;
+                    overflow-x: auto; font-size: 0.85em; }}
+  .item-text pre code {{ background: none; padding: 0; }}
+  .item-text ul, .item-text ol {{ margin: 6px 0; padding-left: 24px; }}
+  .item-text table {{ border-collapse: collapse; margin: 8px 0; }}
+  .item-text table th, .item-text table td {{ border: 1px solid #ddd; padding: 6px 10px; }}
+  .item-text table th {{ background: #f0f0f0; }}
+  .local-view-link {{ float: right; font-size: 0.75em; font-weight: normal; padding: 3px 10px;
+                      background: #e0f2f1; color: #00695c; border-radius: 12px;
+                      text-decoration: none; transition: background 0.15s; }}
+  .local-view-link:hover {{ background: #b2dfdb; text-decoration: none; }}
+  .item-actions {{ display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; }}
+  .action-btn {{ padding: 6px 16px; border: 1px solid #ccc; border-radius: 6px;
+                 background: #fff; cursor: pointer; font-size: 0.85em; margin-right: 8px;
+                 transition: background 0.15s; }}
+  .action-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+  .review-btn {{ color: #4caf50; border-color: #4caf50; }}
+  .review-btn:hover:not(:disabled) {{ background: #e8f5e9; }}
+  .edit-btn {{ color: #1a73e8; border-color: #1a73e8; }}
+  .edit-btn:hover:not(:disabled) {{ background: #e3f2fd; }}
+  .clear-btn {{ color: #e65100; border-color: #e65100; }}
+  .clear-btn:hover:not(:disabled) {{ background: #fff3e0; }}
+  .save-btn {{ color: #fff; background: #1a73e8; border-color: #1a73e8; }}
+  .save-btn:hover:not(:disabled) {{ background: #1565c0; }}
+  .cancel-btn {{ color: #666; border-color: #999; }}
+  .cancel-btn:hover {{ background: #f5f5f5; }}
+  .item-editor {{ margin: 8px 0; }}
+  .edit-textarea {{ width: 100%; min-height: 120px; padding: 10px; border: 1px solid #1a73e8;
+                    border-radius: 6px; font-family: monospace; font-size: 0.9em;
+                    line-height: 1.5; resize: vertical; box-sizing: border-box; }}
+  .edit-textarea:focus {{ outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }}
+  .edit-actions {{ margin-top: 8px; }}
+  .hidden {{ display: none; }}
+  .toast {{ position: fixed; bottom: 20px; right: 20px; padding: 12px 24px;
+            border-radius: 8px; color: #fff; font-size: 0.9em; z-index: 1000;
+            animation: toastFade 3s ease forwards; pointer-events: none; }}
+  .toast.success {{ background: #4caf50; }}
+  .toast.error {{ background: #d32f2f; }}
+  @keyframes toastFade {{ 0% {{ opacity:0; transform:translateY(20px); }}
+    10% {{ opacity:1; transform:translateY(0); }} 80% {{ opacity:1; }}
+    100% {{ opacity:0; }} }}
 </style>
 </head>
 <body>
@@ -397,6 +613,10 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
     <div class="value">{reviewed_items}/{total_items}</div>
   </div>
   <div class="card">
+    <h3>Suspect</h3>
+    <div class="value" style="color:{'#e65100' if suspect_count else '#4caf50'}">{suspect_count}</div>
+  </div>
+  <div class="card">
     <h3>エラー</h3>
     <div class="value" style="color:{'#d32f2f' if issues['errors'] else '#4caf50'}">{len(issues['errors'])}</div>
   </div>
@@ -406,11 +626,35 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
   </div>
 </div>
 
-<h2>機能グループフィルタ</h2>
-<div class="group-filter">
-  <button class="group-btn active" data-group="__all__" onclick="showAll()">すべて</button>
-  {group_buttons}
+<h2>フィルタ</h2>
+<div class="filter-section">
+  <label>グループ:</label>
+  <div class="group-filter" style="display:inline">
+    <button class="group-btn active" data-group="__all__" onclick="showAllGroups()">すべて</button>
+    {group_buttons}
+  </div>
 </div>
+<div class="filter-section">
+  <label>状態:</label>
+  <button class="status-btn" data-status="reviewed" onclick="toggleStatus(this)">✓ レビュー済</button>
+  <button class="status-btn" data-status="unreviewed" onclick="toggleStatus(this)">○ 未レビュー</button>
+  <button class="status-btn" data-status="suspect" onclick="toggleStatus(this)">⚠ Suspect</button>
+</div>
+<div class="filter-section">
+  <label>アイテムID:</label>
+  <input type="text" class="id-search" id="id-search" placeholder="例: SPEC001, REQ00"
+         oninput="applyFilters()">
+</div>
+
+<h2>検証結果</h2>
+{issue_section}
+
+<h2>トレーサビリティマトリクス</h2>
+<p style="font-size:0.85em; color:#888">✓=レビュー済　○=未レビュー　⚠=Suspect（複数同時表示あり。アイテムIDをクリックで詳細へ）</p>
+<table id="matrix-table">
+<tr>{header_cells}</tr>
+{matrix_rows}
+</table>
 
 <h2>カバレッジ</h2>
 <table id="coverage-table">
@@ -418,41 +662,224 @@ def generate_html_report(tree, issues, matrix, prefixes, coverage, output_path):
 {coverage_rows}
 </table>
 
-<h2>検証結果</h2>
-{issue_section}
-
-<h2>トレーサビリティマトリクス</h2>
-<p style="font-size:0.85em; color:#888">✓=レビュー済　○=未レビュー</p>
-<table id="matrix-table">
-<tr>{header_cells}</tr>
-{matrix_rows}
-</table>
+<h2 id="item-details">アイテム詳細</h2>
+{item_detail_section}
 
 <script>
 let activeGroups = new Set();
+let activeStatuses = new Set();
+
 function toggleGroup(btn) {{
   const group = btn.dataset.group;
   const allBtn = document.querySelector('[data-group="__all__"]');
   if (activeGroups.has(group)) {{ activeGroups.delete(group); btn.classList.remove('active'); }}
   else {{ activeGroups.add(group); btn.classList.add('active'); allBtn.classList.remove('active'); }}
-  if (activeGroups.size === 0) {{ showAll(); return; }}
-  filterRows();
+  if (activeGroups.size === 0) {{ showAllGroups(); return; }}
+  applyFilters();
 }}
-function showAll() {{
+
+function showAllGroups() {{
   activeGroups.clear();
   document.querySelectorAll('.group-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('[data-group="__all__"]').classList.add('active');
-  document.querySelectorAll('#matrix-table tr[data-group]').forEach(r => r.classList.remove('hidden'));
-  document.querySelectorAll('#coverage-table .coverage-group').forEach(r => r.classList.remove('hidden'));
-  document.querySelectorAll('#coverage-table .coverage-total').forEach(r => r.classList.remove('hidden'));
+  applyFilters();
 }}
-function filterRows() {{
+
+function toggleStatus(btn) {{
+  const status = btn.dataset.status;
+  if (activeStatuses.has(status)) {{ activeStatuses.delete(status); btn.classList.remove('active'); }}
+  else {{ activeStatuses.add(status); btn.classList.add('active'); }}
+  applyFilters();
+}}
+
+function applyFilters() {{
+  const idQuery = document.getElementById('id-search').value.trim().toUpperCase();
+
+  // Matrix rows
   document.querySelectorAll('#matrix-table tr[data-group]').forEach(row => {{
-    row.classList.toggle('hidden', !activeGroups.has(row.dataset.group));
+    let show = true;
+
+    // Group filter
+    if (activeGroups.size > 0 && !activeGroups.has(row.dataset.group)) {{
+      show = false;
+    }}
+
+    // Status filter
+    if (show && activeStatuses.size > 0) {{
+      const rowStatuses = (row.dataset.statuses || '').split(' ');
+      const match = rowStatuses.some(s => activeStatuses.has(s));
+      if (!match) show = false;
+    }}
+
+    // ID filter
+    if (show && idQuery) {{
+      const rowUids = (row.dataset.uids || '').toUpperCase();
+      const match = idQuery.split(',').some(q => rowUids.includes(q.trim()));
+      if (!match) show = false;
+    }}
+
+    row.classList.toggle('hidden', !show);
   }});
+
+  // Coverage rows (group filter only)
   document.querySelectorAll('#coverage-table .coverage-group').forEach(row => {{
-    row.classList.toggle('hidden', !activeGroups.has(row.dataset.group));
+    if (activeGroups.size === 0) {{ row.classList.remove('hidden'); }}
+    else {{ row.classList.toggle('hidden', !activeGroups.has(row.dataset.group)); }}
   }});
+  document.querySelectorAll('#coverage-table .coverage-total').forEach(row => {{
+    row.classList.remove('hidden');
+  }});
+}}
+
+// --- Highlight on navigation ---
+function highlightItem(id) {{
+  document.querySelectorAll('.item-detail.highlighted').forEach(
+    el => el.classList.remove('highlighted')
+  );
+  const el = document.getElementById(id);
+  if (el) {{
+    el.classList.add('highlighted');
+    el.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+  }}
+}}
+
+document.addEventListener('click', function(e) {{
+  const link = e.target.closest('a[href^="#detail-"]');
+  if (link) {{
+    e.preventDefault();
+    const id = link.getAttribute('href').substring(1);
+    history.replaceState(null, '', '#' + id);
+    highlightItem(id);
+  }}
+}});
+
+window.addEventListener('hashchange', function() {{
+  const id = window.location.hash.substring(1);
+  if (id.startsWith('detail-')) highlightItem(id);
+}});
+
+if (window.location.hash && window.location.hash.startsWith('#detail-')) {{
+  setTimeout(function() {{ highlightItem(window.location.hash.substring(1)); }}, 100);
+}}
+
+// --- Serve mode: action buttons ---
+if (window.location.protocol !== 'file:') {{
+  document.querySelectorAll('.item-actions').forEach(el => el.style.display = 'block');
+}}
+
+function showToast(msg, type) {{
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || 'success');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}}
+
+async function doReview(uid) {{
+  const btn = document.querySelector('[data-uid="'+uid+'"] .review-btn');
+  btn.disabled = true; btn.textContent = '処理中...';
+  try {{
+    const res = await fetch('/api/review/' + uid, {{ method: 'POST' }});
+    const data = await res.json();
+    if (data.ok) {{
+      const detail = document.getElementById('detail-' + uid);
+      const badges = detail.querySelectorAll('.suspect, .unreviewed, .reviewed');
+      // suspect + unreviewed/reviewed を全て消してレビュー済に置換
+      const parent = badges.length > 0 ? badges[0].parentNode : null;
+      badges.forEach(b => b.remove());
+      if (parent) {{
+        const newBadge = document.createElement('span');
+        newBadge.className = 'reviewed';
+        newBadge.textContent = '✓ レビュー済';
+        parent.insertBefore(newBadge, parent.firstChild);
+      }}
+      btn.textContent = '✓ Review済';
+      showToast(uid + ' をレビュー済にしました');
+    }} else {{
+      btn.textContent = 'Review'; btn.disabled = false;
+      showToast('エラー: ' + data.error, 'error');
+    }}
+  }} catch(e) {{
+    btn.textContent = 'Review'; btn.disabled = false;
+    showToast('通信エラー: ' + e.message, 'error');
+  }}
+}}
+
+async function doClear(uid) {{
+  const btn = document.querySelector('[data-uid="'+uid+'"] .clear-btn');
+  btn.disabled = true; btn.textContent = '処理中...';
+  try {{
+    const res = await fetch('/api/clear/' + uid, {{ method: 'POST' }});
+    const data = await res.json();
+    if (data.ok) {{
+      const detail = document.getElementById('detail-' + uid);
+      // suspectバッジだけを除去（reviewed/unreviewedはそのまま残す）
+      const suspectBadge = detail.querySelector('.suspect');
+      if (suspectBadge) suspectBadge.remove();
+      btn.textContent = '✓ Clear済';
+      showToast(uid + ' のsuspectリンクを解消しました');
+    }} else {{
+      btn.textContent = 'Clear'; btn.disabled = false;
+      showToast('エラー: ' + data.error, 'error');
+    }}
+  }} catch(e) {{
+    btn.textContent = 'Clear'; btn.disabled = false;
+    showToast('通信エラー: ' + e.message, 'error');
+  }}
+}}
+
+function startEdit(uid) {{
+  document.querySelector('.item-text[data-uid="'+uid+'"]').classList.add('hidden');
+  document.querySelector('.item-editor[data-uid="'+uid+'"]').classList.remove('hidden');
+  const ta = document.querySelector('.edit-textarea[data-uid="'+uid+'"]');
+  ta.focus();
+  ta.style.height = 'auto';
+  ta.style.height = Math.max(120, ta.scrollHeight + 4) + 'px';
+}}
+
+function cancelEdit(uid) {{
+  document.querySelector('.item-editor[data-uid="'+uid+'"]').classList.add('hidden');
+  document.querySelector('.item-text[data-uid="'+uid+'"]').classList.remove('hidden');
+}}
+
+async function doSave(uid) {{
+  const ta = document.querySelector('.edit-textarea[data-uid="'+uid+'"]');
+  const btn = document.querySelector('.item-editor[data-uid="'+uid+'"] .save-btn');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try {{
+    const res = await fetch('/api/edit/' + uid, {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ text: ta.value }})
+    }});
+    const data = await res.json();
+    if (data.ok) {{
+      const textDiv = document.querySelector('.item-text[data-uid="'+uid+'"]');
+      textDiv.innerHTML = data.html || ('<p>' + ta.value.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/\\n/g,'<br>') + '</p>');
+      // ステータスを未レビュー+suspectに更新（suspectがあれば残す）
+      const detail = document.getElementById('detail-' + uid);
+      const oldBadges = detail.querySelectorAll('.reviewed, .unreviewed');
+      oldBadges.forEach(b => b.remove());
+      // suspect の後ろ（または先頭）に未レビューバッジを追加
+      const statusContainer = detail.querySelector('.status-badge');
+      if (statusContainer) {{
+        const newBadge = document.createElement('span');
+        newBadge.className = 'unreviewed';
+        newBadge.textContent = '○ 未レビュー';
+        statusContainer.appendChild(newBadge);
+      }}
+      cancelEdit(uid);
+      btn.textContent = '保存'; btn.disabled = false;
+      showToast(uid + ' のテキストを更新しました');
+    }} else {{
+      btn.textContent = '保存'; btn.disabled = false;
+      showToast('エラー: ' + data.error, 'error');
+    }}
+  }} catch(e) {{
+    btn.textContent = '保存'; btn.disabled = false;
+    showToast('通信エラー: ' + e.message, 'error');
+  }}
 }}
 </script>
 </body>
@@ -461,6 +888,62 @@ function filterRows() {{
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(report_html)
     return output_path
+
+
+def _generate_local_views(tree, output_dir):
+    """局所トレーサビリティビューをグループごとに自動生成する。"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, script_dir)
+    try:
+        from local_trace_view import (
+            build_link_index,
+            collect_chains_by_group,
+            trace_full_chain,
+            generate_local_html,
+            get_all_groups,
+            _generate_index,
+        )
+    except ImportError:
+        print("WARNING: local_trace_view.py が見つかりません。局所ビューの生成をスキップします。")
+        return
+    finally:
+        sys.path.pop(0)
+
+    local_dir = os.path.join(output_dir, "local")
+    os.makedirs(local_dir, exist_ok=True)
+
+    children_idx, parents_idx = build_link_index(tree)
+    all_groups = get_all_groups(tree)
+    generated = []
+
+    print("局所トレーサビリティビューを生成中...")
+    for group in all_groups:
+        group_uids = collect_chains_by_group(tree, group)
+        if not group_uids:
+            continue
+        expanded = set()
+        for uid in group_uids:
+            expanded |= trace_full_chain(uid, children_idx, parents_idx, tree)
+        label = f"グループ: {group}"
+        safe_name = group.replace("/", "_").replace(" ", "_")
+        html_path = os.path.join(local_dir, f"trace_{safe_name}.html")
+        generate_local_html(tree, expanded, label, html_path,
+                            back_link="../traceability_report.html")
+        generated.append((group, html_path))
+
+    _generate_index(generated, local_dir)
+    print(f"局所ビュー: {len(generated)}グループ → {local_dir}/")
+
+
+def _serve_report(report_path, tree, port, strict=False):
+    """REST API + SPA サーバーを起動する（serve_app に委譲）。"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, script_dir)
+    try:
+        from serve_app import serve
+    finally:
+        sys.path.pop(0)
+    serve(tree, os.getcwd(), port=port, strict=strict)
 
 
 def main():
@@ -472,6 +955,9 @@ def main():
     parser.add_argument("--strict", action="store_true",
                         help="全ての親アイテムに子リンクがあることを要求する")
     parser.add_argument("--json", action="store_true", help="JSON形式でもサマリを出力する")
+    parser.add_argument("--serve", action="store_true",
+                        help="ローカルサーバーを起動（Review/Clearボタンが有効になる）")
+    parser.add_argument("--port", type=int, default=8080, help="サーバーポート (default: 8080)")
     args = parser.parse_args()
 
     project_dir = os.path.abspath(args.project_dir)
@@ -496,11 +982,14 @@ def main():
     generate_html_report(tree, issues, matrix, prefixes, coverage, html_path)
     print(f"HTMLレポート: {html_path}")
 
+    # 局所トレーサビリティビューを自動生成
+    _generate_local_views(tree, output_dir)
+
     if args.json:
         total_items = sum(len(list(d)) for d in tree)
         reviewed_items = sum(
             1 for d in tree for item in d
-            if item.reviewed is not None and item.reviewed != ""
+            if item.reviewed
         )
         summary = {
             "timestamp": datetime.now().isoformat(),
@@ -519,7 +1008,7 @@ def main():
     total_items = sum(len(list(d)) for d in tree)
     reviewed_items = sum(
         1 for d in tree for item in d
-        if item.reviewed is not None and item.reviewed != ""
+        if item.reviewed
     )
     groups = sorted({get_group(item) for doc in tree for item in doc})
 
@@ -552,7 +1041,10 @@ def main():
                 gm = "✓" if gd["percentage"] == 100 else "△" if gd["percentage"] >= 50 else "✗"
                 print(f"      {gm} [{g}] {gd['covered']}/{gd['total']} ({gd['percentage']}%)")
 
-    sys.exit(1 if issues["errors"] else 0)
+    if args.serve:
+        _serve_report(html_path, tree, port=args.port, strict=args.strict)
+    else:
+        sys.exit(1 if issues["errors"] else 0)
 
 
 if __name__ == "__main__":

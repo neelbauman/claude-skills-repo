@@ -4,7 +4,7 @@
 SYS → SRD → TST の3階層ドキュメントツリーを作成する。
 
 Usage:
-    python init_project.py <project-dir> [--digits 3] [--separator ""] [--no-git-init]
+    python init_project.py <project-dir> [--docs-dir ./reqs] [--digits 3] [--separator ""] [--no-git-init]
 """
 
 import argparse
@@ -49,6 +49,11 @@ def main():
         "--separator", default="", help="プレフィックスと番号の区切り文字（デフォルト: なし）"
     )
     parser.add_argument(
+        "--docs-dir",
+        default="./reqs",
+        help="ドキュメントツリーのベースディレクトリ（デフォルト: ./reqs）",
+    )
+    parser.add_argument(
         "--no-git-init",
         action="store_true",
         help="gitリポジトリの初期化をスキップする",
@@ -72,28 +77,29 @@ def main():
     sep_args = ["--separator", args.separator] if args.separator else []
 
     # ドキュメント階層の定義
+    docs_dir = args.docs_dir
     documents = [
         {
             "prefix": "REQ",
-            "path": "./reqs/req",
+            "path": f"{docs_dir}/req",
             "parent": None,
             "desc": "要件（What: 何を実現するか）",
         },
         {
             "prefix": "SPEC",
-            "path": "./reqs/spec",
+            "path": f"{docs_dir}/spec",
             "parent": "REQ",
             "desc": "仕様（How: どう実現するか）",
         },
         {
             "prefix": "IMPL",
-            "path": "./reqs/impl",
+            "path": f"{docs_dir}/impl",
             "parent": "SPEC",
             "desc": "実装（Build: 何を作ったか）",
         },
         {
             "prefix": "TST",
-            "path": "./reqs/tst",
+            "path": f"{docs_dir}/tst",
             "parent": "SPEC",
             "desc": "テスト（Verify: どう検証するか）",
         },

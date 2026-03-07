@@ -256,10 +256,10 @@ PR単位で影響分析を実行する場合に有効。
 
 ```bash
 # mainブランチとの差分から検出
-python impact_analysis.py . --from-git --base main
+uv run python impact_analysis.py . --from-git --base main
 
 # 直前のコミットからの差分
-python impact_analysis.py . --from-git
+uv run python impact_analysis.py . --from-git
 ```
 
 **方式3: 手動指定 (`--changed UID`)**
@@ -268,7 +268,7 @@ python impact_analysis.py . --from-git
 変更前のシミュレーションとして使える。
 
 ```bash
-python impact_analysis.py . --changed SPEC001 SPEC003
+uv run python impact_analysis.py . --changed SPEC001 SPEC003
 ```
 
 **影響範囲のトレース**
@@ -396,18 +396,18 @@ validate_and_report.py が出力するメトリクス:
 
 ```bash
 # アイテム追加（リンク付き）
-python doorstop_ops.py . add -d SPEC -t "仕様文" -g AUTH --links REQ001
+uv run python doorstop_ops.py . add -d SPEC -t "仕様文" -g AUTH --links REQ001
 
 # アイテム更新
-python doorstop_ops.py . update SPEC001 -t "新しい仕様文"
+uv run python doorstop_ops.py . update SPEC001 -t "新しい仕様文"
 
 # suspect解消
-python doorstop_ops.py . clear IMPL001 TST001
+uv run python doorstop_ops.py . clear IMPL001 TST001
 
 # 状況確認
-python doorstop_ops.py . list -d SPEC -g AUTH
-python doorstop_ops.py . groups
-python doorstop_ops.py . tree
+uv run python doorstop_ops.py . list -d SPEC -g AUTH
+uv run python doorstop_ops.py . groups
+uv run python doorstop_ops.py . tree
 ```
 
 ### エージェントの判断フロー
