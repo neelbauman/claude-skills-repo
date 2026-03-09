@@ -154,7 +154,7 @@ def main():
         # .doorstop.yml に attributes セクションを追加
         yml_path = Path(project_dir) / docs_dir / doc["path"] / ".doorstop.yml"
         _configure_attributes(yml_path)
-        print(f"    attributes 設定完了")
+        print("    attributes 設定完了")
 
     # 検証
     print("\n--- ドキュメントツリー ---")

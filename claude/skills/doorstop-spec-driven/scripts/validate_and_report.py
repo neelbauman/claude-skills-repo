@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Doorstopプロジェクトのバリデーションとトレーサビリティレポート生成。
 
-REQ → SPEC → IMPL/TST の4階層対応。
 構造検証、リンク整合性、ref存在チェック、機能グループ別カバレッジ、
 レビュー状態の追跡を行い、HTMLトレーサビリティレポートを出力する。
 
@@ -26,9 +25,7 @@ from html_builder import (
     h,
     get_group,
     get_references,
-    get_references_display,
     is_derived,
-    find_item,
     detect_suspect_uids,
     build_children_map,
     build_matrix_cell,
