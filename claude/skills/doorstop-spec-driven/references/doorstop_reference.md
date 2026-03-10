@@ -113,68 +113,37 @@ attributes:
 2.1.1 → サブ要件
 ```
 
-## 要件テキストの書き方
+## カスタム属性の使い方
 
-### 良い例
+### groups（機能グループ）
 
-```
-システムはログインに3回連続失敗したアカウントを30分間ロックすること。
-ソフトウェアは全てのAPI応答を200ms以内に返却すること。
-テストはログイン成功時にHTTPステータス200が返ることを検証すること。
-```
+機能グループで横断的に分類する。推奨グループ名:
+- 機能系: `AUTH`, `PAY`, `USR`, `NTF`, `RPT`, `ADM`, `DAT`
+- 非機能系（NFRドキュメント）: `PERF`, `SEC`, `REL`, `MNT`, `PRT`, `SAF`
 
-### 避けるべき表現
-
-```
-✗ システムは適切にエラーハンドリングすること。        → 「適切に」が曖昧
-✗ レスポンスは十分高速であること。                    → 数値基準がない
-✗ ソフトウェアは使いやすいUIを提供すること。          → 主観的で検証不能
-✗ システムはセキュアであること。                      → 具体性に欠ける
-```
-
-### REQ / SPEC / TST の使い分け
-
-| レベル | 焦点 | 例 |
-|--------|------|-----|
-| REQ | 何を実現するか（What） | 「管理者はユーザーアカウントを無効化できること」 |
-| SPEC | どう実現するか（How） | 「APIは /api/users/{id}/deactivate エンドポイントを提供すること」 |
-| TST | どう検証するか（Verify） | 「DELETEリクエスト送信後、該当ユーザーのstatus=inactiveを確認する」 |
-
-### 機能グループ（group カスタム属性）
-
-各アイテムに `groups` 属性を設定して、機能単位で横断的に分類できる。
-
-```yaml
-# YAMLファイル内での表現
-active: true
-groups:
-  - AUTH          # ← カスタム属性
-header: 'ログイン'
-level: 1.1
-links:
-  - REQ001
-text: |
-  ソフトウェアはJWT認証を実装すること。
-```
-
-doorstop_ops.py での設定:
 ```bash
-# 追加時に指定
-doorstop_ops.py <dir> add -d SPEC -t "要件テキスト" -g AUTH,PAY
-
-# 既存アイテムのグループ変更
-doorstop_ops.py <dir> update SPEC001 -g AUTH,PAY
+doorstop_ops.py <dir> add -d REQ -t "..." -g AUTH,PAY
+doorstop_ops.py <dir> update REQ001 -g AUTH,PAY
 ```
 
-推奨グループ名の例:
-- `AUTH` — 認証・認可
-- `PAY` — 決済・課金
-- `USR` — ユーザー管理
-- `NTF` — 通知
-- `RPT` — レポート・分析
-- `ADM` — 管理機能
-- `DAT` — データ管理
-- `SEC` — セキュリティ
+### priority（優先度）
+
+REQ/NFRアイテムの実装優先度。トリアージ・バックログ管理で使用する。
+
+| 値 | 意味 |
+|---|---|
+| `critical` | 今すぐ必要、リリースブロッカー |
+| `high` | 今回のリリースに含める |
+| `medium` | できれば今回、次回でも可（デフォルト） |
+| `low` | 将来対応、今回はスコープ外 |
+
+```bash
+doorstop_ops.py <dir> add -d REQ -t "..." -g AUTH --priority high
+doorstop_ops.py <dir> update REQ001 --priority critical
+trace_query.py <dir> backlog              # 優先度順一覧
+```
+
+アイテムの書き方は `references/item_writing_guide.md` を参照。
 
 ## 操作スクリプトリファレンス
 
@@ -210,9 +179,11 @@ doorstop_ops.py <dir> add -d IMPL -t "認証モジュールの実装" -g AUTH,PA
 doorstop_ops.py <dir> add -d TST -t "認証成功時にHTTP200を返すことを検証する" -g AUTH,PAY \
   --references '[{"path":"tests/test_auth.py","type":"file"}]' --links SPEC001
 
-# レベル指定で追加
+# レベル指定で追加（指定したレベルとして末尾などに追加）
 doorstop_ops.py <dir> add -d REQ -t "サブ要件" -g AUTH,PAY -l 1.2
-```
+
+# 特定のレベルに挿入し、以降のアイテムを自動で後ろにずらす
+doorstop_ops.py <dir> add -d REQ -t "挿入要件" --insert 1.5
 
 #### アイテム更新（update）
 ```bash
@@ -229,9 +200,51 @@ doorstop_ops.py <dir> update IMPL001 --references '[{"path":"src/new_mod.py","ty
 doorstop_ops.py <dir> update REQ001 --set-non-normative
 ```
 
+#### アイテムの並べ替え（reorder）
+レベル（階層）を変更し、以降のアイテムのレベルを自動で調整します。
+
+```bash
+# REQ004 をレベル 1.5 の位置に移動し、以降のアイテムを自動調整する
+doorstop_ops.py <dir> reorder REQ004 1.5
+```
+
 #### リンク追加（link）
 ```bash
 doorstop_ops.py <dir> link SPEC001 REQ001    # SPEC001 → REQ001 へリンク
+```
+
+#### リンク削除（unlink）
+```bash
+doorstop_ops.py <dir> unlink SPEC001 REQ001  # SPEC001 → REQ001 のリンクを削除
+```
+
+リンクの張り替え（別の親に繋ぎ直す）:
+```bash
+doorstop_ops.py <dir> unlink SPEC001 REQ001  # 旧リンクを削除
+doorstop_ops.py <dir> link SPEC001 REQ002    # 新リンクを追加
+```
+
+#### 非活性化（deactivate）
+```bash
+# 単体の非活性化
+doorstop_ops.py <dir> deactivate REQ001          # REQ001 を active: false に
+doorstop_ops.py <dir> deactivate REQ001 SPEC001  # 複数UID指定可
+
+# チェーン非活性化（下流を自動検査し連鎖的に非活性化）
+doorstop_ops.py <dir> deactivate-chain REQ001
+# → REQ001 と、他に活性な親を持たない下流アイテムを一括非活性化
+
+# 強制チェーン非活性化（他に活性な親があっても強制）
+doorstop_ops.py <dir> deactivate-chain REQ001 --force
+```
+
+#### 活性化（activate）
+```bash
+# 単体の活性化
+doorstop_ops.py <dir> activate REQ001 SPEC001
+
+# チェーン活性化（下流を連鎖的に活性化）
+doorstop_ops.py <dir> activate-chain REQ001
 ```
 
 #### suspect解消（clear）
@@ -276,7 +289,13 @@ doorstop_ops.py <dir> find "認証"
 trace_query.py <dir> status
 
 # 特定UIDの上下リンクチェーンを表示
-trace_query.py <dir> chain REQ001
+trace_query.py <dir> chain SPEC003
+
+# ファイルパスをreferencesから逆引きしてチェーンを表示
+# → 実装/テストファイルを起点にどのSPEC/REQに紐づくか追跡できる
+trace_query.py <dir> chain --file src/beautyspot/core.py
+trace_query.py <dir> chain --file tests/integration/core/test_mark.py
+trace_query.py <dir> chain --file core.py   # basename のみでも可
 
 # カバレッジ（全体 / グループ別）
 trace_query.py <dir> coverage
@@ -301,6 +320,22 @@ impact_analysis.py <dir> --changed REQ001
 
 # JSON出力
 impact_analysis.py <dir> --detect-suspects --json report.json
+```
+
+### baseline_manager.py — ベースライン管理
+
+```bash
+# ベースラインを作成（任意のタイミングで記録）
+baseline_manager.py <dir> create v1.0
+baseline_manager.py <dir> create v1.0 --tag                    # Git タグも付ける
+baseline_manager.py <dir> create sprint-3 --tag --tag-name v1.3.0-spec
+
+# ベースライン一覧
+baseline_manager.py <dir> list
+
+# バージョン間の差分（stamp変化=テキスト変更、added/removed=アイテム増減）
+baseline_manager.py <dir> diff v1.0 v2.0
+baseline_manager.py <dir> diff v1.0 HEAD  # HEAD = 現在のツリー状態
 ```
 
 ### validate_and_report.py — バリデーション・レポート
