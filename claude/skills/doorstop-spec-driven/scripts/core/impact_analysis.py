@@ -258,9 +258,9 @@ def _generate_action_plan(changed_item, doc_prefix, downstream, suspects, projec
             "validation": "..."         # 最終検証コマンド
         }
     """
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    ops = os.path.join(script_dir, "doorstop_ops.py")
-    validate = os.path.join(os.path.dirname(script_dir), "reporting", "validate_and_report.py")
+    # script_dir = os.path.dirname(os.path.abspath(__file__))
+    # ops = os.path.join(script_dir, "doorstop_ops.py")
+    # validate = os.path.join(os.path.dirname(script_dir), "reporting", "validate_and_report.py")
 
     uid = str(changed_item.uid)
     review_commands = []
@@ -326,7 +326,7 @@ def _auto_execute(results, project_dir):
 
     for r in results:
         ap = r.get("action_plan", {})
-        uid = r["uid"]
+        # uid = r["uid"]
 
         # clear を先に実行（suspect 解消）
         for cmd_str in ap.get("clear_commands", []):
@@ -339,7 +339,7 @@ def _auto_execute(results, project_dir):
                     sys.executable, ops_script, project_dir, subcmd
                 ] + target_uids
                 try:
-                    result = subprocess.run(
+                    _ = subprocess.run(
                         real_cmd, capture_output=True, text=True, check=True
                     )
                     executed.append(cmd_str)
@@ -358,7 +358,7 @@ def _auto_execute(results, project_dir):
                     sys.executable, ops_script, project_dir, subcmd
                 ] + target_uids
                 try:
-                    result = subprocess.run(
+                    _ = subprocess.run(
                         real_cmd, capture_output=True, text=True, check=True
                     )
                     executed.append(cmd_str)

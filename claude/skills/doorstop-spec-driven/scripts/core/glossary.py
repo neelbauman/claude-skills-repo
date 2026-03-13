@@ -28,7 +28,6 @@ import json
 import os
 import re
 import sys
-from collections import defaultdict
 
 try:
     # PyYAML (doorstop の依存関係に含まれる)
