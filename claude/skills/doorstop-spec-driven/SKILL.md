@@ -54,6 +54,7 @@ description: >
 
 ```bash
 uv add doorstop --dev
+uv add markdown --dev
 uv run python <skill-path>/scripts/init_project.py <project-dir> --profile standard
 
 # NFRドキュメントも作成する場合（standard/full推奨）:
