@@ -107,6 +107,26 @@ function renderAllMermaid() {
 })();
 
 // ===================================================================
+// D3.js — CDN loader for tree graph view
+// ===================================================================
+let d3Ready = false;
+let d3 = null;
+(async () => {
+  const timeout = (ms) => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
+  try {
+    const mod = await Promise.race([
+      import('https://cdn.jsdelivr.net/npm/d3@7/+esm'),
+      timeout(8000),
+    ]);
+    d3 = mod;
+    d3Ready = true;
+    console.log('D3.js loaded (online mode)');
+  } catch (e) {
+    console.warn('D3.js unavailable (offline mode):', e.message);
+  }
+})();
+
+// ===================================================================
 // Rich Editor (TipTap) — CDN loader with offline fallback
 // ===================================================================
 let richEditorReady = false;
@@ -230,6 +250,7 @@ function route() {
     case 'matrix': renderMatrix(); break;
     case 'group': renderGroup(decodeURIComponent(param)); break;
     case 'document': renderDocument(decodeURIComponent(param)); break;
+    case 'tree': renderTreeGraph(decodeURIComponent(param)); break;
     case 'validation': renderValidation(); break;
     default: renderDashboard();
   }
@@ -1554,6 +1575,1163 @@ async function refreshOtherPanels(excludeId) {
 }
 
 // ===================================================================
+// Tree Graph View — Interactive traceability graph
+// ===================================================================
+
+const TREE_COLORS = {
+  REQ: '#4a90d9', ARCH: '#8b5cf6', SPEC: '#10b981',
+  IMPL: '#f59e0b', TST: '#ef4444', DEFAULT: '#6b7280',
+};
+
+function prefixColor(prefix) {
+  return TREE_COLORS[prefix] || TREE_COLORS.DEFAULT;
+}
+
+let treeState = {
+  selectedNode: null,
+  selectedUids: new Set(),  // multi-select
+  hops: 2,
+  graphData: null,
+  mode: 'ego',   // 'ego' | 'full'
+  groupFilter: '',
+  dragLine: null,
+  dragSource: null,
+  savedZoomTransform: null,  // ズーム位置保持用
+};
+
+async function loadGraphData() {
+  const [overview, graphData] = await Promise.all([
+    API.get('/api/overview'),
+    API.get('/api/graph'),
+  ]);
+  treeState.graphData = graphData;
+  treeState.overview = overview;
+  return { overview, graphData };
+}
+
+async function renderTreeGraph(param) {
+  const main = document.getElementById('main');
+
+  if (!d3Ready) {
+    main.innerHTML = `<div class="tree-landing">
+      <h2>Tree Graph</h2>
+      <p>D3.js の読み込みに失敗しました。オンライン環境で再試行してください。</p>
+    </div>`;
+    return;
+  }
+
+  // Group scope view (via hash: #/tree/_group_/NAME)
+  if (param.startsWith('_group_/')) {
+    const group = decodeURIComponent(param.slice('_group_/'.length));
+    const { graphData } = treeState.graphData ? { graphData: treeState.graphData } : await loadGraphData();
+    const filtered = graphData.nodes.filter(n => n.groups.includes(group));
+    const edges = graphData.edges.filter(e =>
+      filtered.some(n => n.uid === e.child) && filtered.some(n => n.uid === e.parent));
+    renderTreeSVG(main, { nodes: filtered, edges, layers: graphData.layers }, null, `グループ: ${group}`);
+    return;
+  }
+
+  // Prefix scope view (via hash: #/tree/_prefix_/PREFIX)
+  if (param.startsWith('_prefix_/')) {
+    const prefix = param.slice('_prefix_/'.length);
+    const { graphData } = treeState.graphData ? { graphData: treeState.graphData } : await loadGraphData();
+    const prefixSet = new Set(graphData.nodes.filter(n => n.prefix === prefix).map(n => n.uid));
+    const relatedUids = new Set(prefixSet);
+    graphData.edges.forEach(e => {
+      if (prefixSet.has(e.child)) relatedUids.add(e.parent);
+      if (prefixSet.has(e.parent)) relatedUids.add(e.child);
+    });
+    const nodes = graphData.nodes.filter(n => relatedUids.has(n.uid));
+    const edges = graphData.edges.filter(e => relatedUids.has(e.child) && relatedUids.has(e.parent));
+    renderTreeSVG(main, { nodes, edges, layers: graphData.layers }, null, `ドキュメント: ${prefix}`);
+    return;
+  }
+
+  // Landing page: group/item selection
+  if (!param && !treeState.selectedNode) {
+    const { overview, graphData } = await loadGraphData();
+
+    const groups = overview.groups || [];
+    const nodesByPrefix = {};
+    graphData.nodes.forEach(n => {
+      if (!nodesByPrefix[n.prefix]) nodesByPrefix[n.prefix] = [];
+      nodesByPrefix[n.prefix].push(n);
+    });
+
+    // Build group cards with stats
+    const groupCards = groups.map(g => {
+      const gNodes = graphData.nodes.filter(n => n.groups.includes(g));
+      const suspect = gNodes.filter(n => n.suspect).length;
+      return `<button class="tree-card" data-group="${h(g)}">
+        <div class="tree-card-name">${h(g)}</div>
+        <div class="tree-card-meta">${gNodes.length} アイテム</div>
+        ${suspect > 0 ? `<div class="tree-card-suspect">⚠ ${suspect} suspect</div>` : ''}
+      </button>`;
+    }).join('');
+
+    // Build prefix cards with coverage stats
+    const prefixCards = graphData.layers.map(p => {
+      const pNodes = nodesByPrefix[p] || [];
+      const total = pNodes.length;
+      const reviewed = pNodes.filter(n => n.reviewed).length;
+      const suspect = pNodes.filter(n => n.suspect).length;
+      const covPct = total > 0 ? Math.round(reviewed / total * 100) : 0;
+      const covColor = covPct >= 80 ? '#10b981' : covPct >= 50 ? '#f59e0b' : '#ef4444';
+      const borderColor = prefixColor(p);
+      return `<button class="tree-card" data-prefix="${h(p)}" style="border-color:${borderColor}">
+        <div class="tree-card-name" style="color:${borderColor}">${h(p)}</div>
+        <div class="tree-card-meta">${total} アイテム</div>
+        <div class="tree-card-stats">
+          <span class="tree-card-cov" style="color:${covColor}">${covPct}% reviewed</span>
+          ${suspect > 0 ? `<span class="tree-card-suspect">⚠ ${suspect}</span>` : ''}
+        </div>
+      </button>`;
+    }).join('');
+
+    main.innerHTML = `<div class="tree-landing">
+      <h2>Tree Graph</h2>
+      <p>ノードを選択してエゴセントリックビューを表示します。カードをクリックでスコープを絞り込めます。</p>
+      <div class="tree-search-row">
+        <input type="text" id="tree-uid-search" placeholder="UID またはヘッダーで検索..." class="tree-search-input">
+        <label class="tree-hops-label">ホップ数:
+          <input type="range" id="tree-hops-slider" min="1" max="4" value="${treeState.hops}" class="tree-hops-slider">
+          <span id="tree-hops-val">${treeState.hops}</span>
+        </label>
+      </div>
+      <div id="tree-search-results" class="tree-search-results"></div>
+      ${groups.length > 0 ? `
+        <h3>グループで絞り込み</h3>
+        <div class="tree-card-grid">${groupCards}</div>
+      ` : ''}
+      <h3>ドキュメント別</h3>
+      <div class="tree-card-grid">${prefixCards}</div>
+    </div>`;
+
+    // Search
+    const searchInput = document.getElementById('tree-uid-search');
+    const searchResults = document.getElementById('tree-search-results');
+    searchInput.addEventListener('input', (e) => {
+      if (e.isComposing) return;
+      filterTreeSearch(searchInput.value, graphData.nodes, searchResults);
+    });
+    searchInput.addEventListener('compositionend', () => {
+      filterTreeSearch(searchInput.value, graphData.nodes, searchResults);
+    });
+
+    // Hops slider
+    document.getElementById('tree-hops-slider').addEventListener('input', (e) => {
+      treeState.hops = parseInt(e.target.value);
+      document.getElementById('tree-hops-val').textContent = treeState.hops;
+    });
+
+    // Group cards → navigate via hash (hashchange triggers renderTreeGraph)
+    main.querySelectorAll('.tree-card[data-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        location.hash = '#/tree/_group_/' + encodeURIComponent(btn.dataset.group);
+      });
+    });
+
+    // Prefix cards → navigate via hash
+    main.querySelectorAll('.tree-card[data-prefix]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        location.hash = '#/tree/_prefix_/' + encodeURIComponent(btn.dataset.prefix);
+      });
+    });
+
+    setTimeout(() => searchInput.focus(), 100);
+    return;
+  }
+
+  // Ego-centric view for a specific node
+  const uid = param || treeState.selectedNode;
+  if (uid) {
+    treeState.selectedNode = uid;
+    try {
+      const data = await API.get(`/api/graph/ego/${uid}?hops=${treeState.hops}`);
+      renderTreeSVG(main, data, uid, null);
+    } catch {
+      main.innerHTML = `<p>アイテム ${h(uid)} が見つかりません。</p>`;
+    }
+  }
+}
+
+function treeGoBack() {
+  treeState.selectedNode = null;
+  const current = location.hash.replace(/^#/, '') || '/';
+  // If already on the landing hash, hashchange won't fire — render directly
+  if (current === '/tree' || current === '/tree/' || current === '') {
+    renderTreeGraph('');
+  } else {
+    location.hash = '#/tree';
+  }
+}
+
+function filterTreeSearch(query, nodes, container) {
+  if (!query || query.length < 1) {
+    container.innerHTML = '';
+    return;
+  }
+  const q = query.toLowerCase();
+  const matches = nodes.filter(n =>
+    n.uid.toLowerCase().includes(q) || (n.header && n.header.toLowerCase().includes(q))
+  ).slice(0, 20);
+
+  container.innerHTML = matches.map(n => `
+    <div class="tree-search-item" data-uid="${h(n.uid)}">
+      <span class="tree-tag" style="background:${prefixColor(n.prefix)}">${h(n.prefix)}</span>
+      <strong>${h(n.uid)}</strong>
+      <span class="tree-search-header">${h(n.header || '')}</span>
+      ${n.suspect ? '<span class="tree-tag tree-tag-suspect">suspect</span>' : ''}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.tree-search-item').forEach(el => {
+    el.addEventListener('click', () => {
+      treeState.selectedNode = el.dataset.uid;
+      location.hash = '#/tree/' + el.dataset.uid;
+    });
+  });
+}
+
+function renderTreeSVG(main, data, centerUid, scopeLabel) {
+  const { nodes, edges, layers } = data;
+  if (nodes.length === 0) {
+    main.innerHTML = '<p style="padding:24px">表示するノードがありません。</p>';
+    return;
+  }
+
+  const NODE_W = 160, NODE_H = 60;
+
+  // Hops slider only shown in ego-centric view
+  const hopsHtml = centerUid ? `
+    <label class="tree-hops-label">ホップ数:
+      <input type="range" id="tree-hops-slider2" min="1" max="4" value="${treeState.hops}" class="tree-hops-slider">
+      <span id="tree-hops-val2">${treeState.hops}</span>
+    </label>` : '';
+
+  const titleHtml = centerUid
+    ? `<span class="tree-center-label">中心: <strong>${h(centerUid)}</strong></span>`
+    : (scopeLabel ? `<span class="tree-center-label">${h(scopeLabel)}</span>` : '');
+
+  main.innerHTML = `
+    <div class="tree-toolbar">
+      <button class="tree-back-btn" onclick="treeGoBack()">&#8592; 一覧に戻る</button>
+      ${titleHtml}
+      ${hopsHtml}
+      <div class="tree-toolbar-spacer"></div>
+      <button class="tree-btn" id="tree-zoom-fit">全体表示</button>
+      <button class="tree-btn" id="tree-zoom-reset">1:1</button>
+    </div>
+    <div class="tree-view-wrapper">
+      <div id="tree-svg-container" class="tree-svg-container"></div>
+      <div id="tree-side-panel" class="tree-side-panel">
+        <div class="tree-side-empty">
+          <p>ノードをクリックして詳細を表示</p>
+          <div class="tree-legend">
+            <div class="tree-legend-item"><div class="tree-legend-box" style="background:#fff;border-color:#4a90d9;border-width:2px"></div>中心ノード</div>
+            <div class="tree-legend-item"><div class="tree-legend-box" style="background:#fff"></div>レビュー済</div>
+            <div class="tree-legend-item"><div class="tree-legend-box" style="background:#f3f4f6"></div>未レビュー</div>
+            <div class="tree-legend-item"><div class="tree-legend-box" style="background:#fff;border-color:#ef4444"></div>⚠ suspect</div>
+            <div class="tree-legend-item" style="color:#888;font-size:11px;margin-top:8px">右クリック: エッジ操作</div>
+            <div class="tree-legend-item" style="color:#888;font-size:11px">右端ドラッグ: リンク作成</div>
+            <div class="tree-legend-item" style="color:#888;font-size:11px">ダブルクリック: 詳細画面へ</div>
+            <div class="tree-legend-item" style="color:#888;font-size:11px">Shift+クリック: 複数選択</div>
+            <div class="tree-legend-item" style="color:#888;font-size:11px">Shift+ドラッグ: 範囲選択</div>
+            <div class="tree-legend-item" style="color:#888;font-size:11px">ESC: 選択解除</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="tree-context-menu" class="tree-context-menu" style="display:none;"></div>
+  `;
+
+  // Ensure tooltip element exists in body
+  if (!document.getElementById('tree-tooltip')) {
+    const tip = document.createElement('div');
+    tip.id = 'tree-tooltip';
+    tip.className = 'tree-tooltip';
+    tip.style.display = 'none';
+    document.body.appendChild(tip);
+  }
+
+  // Hops slider interaction
+  const slider2 = document.getElementById('tree-hops-slider2');
+  if (slider2) {
+    slider2.addEventListener('change', (e) => {
+      treeState.hops = parseInt(e.target.value);
+      document.getElementById('tree-hops-val2').textContent = treeState.hops;
+      if (treeState.selectedNode) {
+        location.hash = '#/tree/' + treeState.selectedNode;
+      }
+    });
+  }
+
+  // ESC to deselect (both single-select and multi-select)
+  const escHandler = (e) => {
+    if (e.key === 'Escape' && document.getElementById('tree-side-panel')) {
+      treeState.selectedUids = new Set();
+      d3.selectAll('.tree-node').classed('tree-node-selected', false).classed('tree-node-multiselected', false);
+      clearNodeHighlight();
+      document.getElementById('tree-side-panel').innerHTML =
+        '<div class="tree-side-empty"><p>ノードをクリックして詳細を表示</p></div>';
+    }
+  };
+  document.addEventListener('keydown', escHandler);
+
+  const container = document.getElementById('tree-svg-container');
+  const rect = container.getBoundingClientRect();
+  const width = rect.width || 800;
+  const height = rect.height || 600;
+
+  // Layout: assign x by layer, y by index within layer
+  const layerNodes = {};
+  nodes.forEach(n => {
+    if (!layerNodes[n.prefix]) layerNodes[n.prefix] = [];
+    layerNodes[n.prefix].push(n.uid);
+  });
+
+  // Order layers by the document hierarchy
+  const orderedLayers = layers.filter(l => layerNodes[l]);
+  const layerCount = orderedLayers.length || 1;
+  const colWidth = Math.max(NODE_W + 60, width / (layerCount + 1));
+
+  // Barycenter heuristic: reorder nodes within each layer to minimize edge crossings
+  (function barycenterSort() {
+    for (let pass = 0; pass < 2; pass++) {
+      orderedLayers.forEach((layer, li) => {
+        if (li === 0) return;
+        const prevLayer = orderedLayers[li - 1];
+        const prevUids = layerNodes[prevLayer] || [];
+        const prevIndex = {};
+        prevUids.forEach((uid, i) => { prevIndex[uid] = i; });
+        const uids = layerNodes[layer] || [];
+        const scored = uids.map(uid => {
+          const connected = edges
+            .filter(e => e.child === uid && prevIndex[e.parent] !== undefined)
+            .map(e => prevIndex[e.parent]);
+          const avg = connected.length > 0
+            ? connected.reduce((a, b) => a + b, 0) / connected.length
+            : uids.indexOf(uid) + 0.5;
+          return { uid, avg };
+        });
+        scored.sort((a, b) => a.avg - b.avg);
+        layerNodes[layer] = scored.map(s => s.uid);
+      });
+    }
+  })();
+
+  const positions = {};
+  orderedLayers.forEach((layer, li) => {
+    const uids = layerNodes[layer] || [];
+    const rowHeight = Math.max(NODE_H + 30, (height - 80) / (uids.length + 1));
+    uids.forEach((uid, ri) => {
+      positions[uid] = {
+        x: colWidth * (li + 1),
+        y: rowHeight * (ri + 1),
+      };
+    });
+  });
+
+  // D3 rendering
+  const svg = d3.select(container).append('svg')
+    .attr('width', width)
+    .attr('height', height)
+    .attr('class', 'tree-svg');
+
+  const g = svg.append('g').attr('class', 'tree-root');
+
+  // Zoom — disabled when Shift is held (Shift+drag = rubber-band selection)
+  const zoom = d3.zoom()
+    .filter(event => !event.shiftKey && event.type !== 'dblclick' ? true : event.type === 'wheel')
+    .scaleExtent([0.2, 3])
+    .on('zoom', (event) => g.attr('transform', event.transform));
+  svg.call(zoom);
+
+  // ── Multi-select helpers (closures over nodes/edges/data) ──────────
+
+  function highlightMultiSelect(uids) {
+    d3.selectAll('.tree-node-group').each(function() {
+      const isSelected = uids.has(d3.select(this).attr('data-uid'));
+      d3.select(this).classed('tree-group-dimmed', !isSelected);
+      d3.select(this).select('.tree-node').classed('tree-node-multiselected', isSelected);
+    });
+    d3.selectAll('.tree-edge')
+      .classed('tree-edge-active', false)
+      .classed('tree-edge-dimmed', true)
+      .attr('marker-end', 'url(#arrowhead)');
+  }
+
+  function showMultiSelectPanel(uids) {
+    const panel = document.getElementById('tree-side-panel');
+    if (!panel) return;
+    const allNodes = (treeState.graphData || data).nodes;
+    const selected = [...uids].map(uid => allNodes.find(n => n.uid === uid)).filter(Boolean);
+    const reviewedCount = selected.filter(n => n.reviewed).length;
+    panel.innerHTML = `
+      <div class="tree-detail-header">
+        <span class="tree-detail-uid">${uids.size} 件選択中</span>
+        <span class="tree-detail-hdr">レビュー済 ${reviewedCount} / 未 ${uids.size - reviewedCount}</span>
+      </div>
+      <div class="tree-bulk-actions">
+        <button class="tree-btn tree-btn-review" onclick="bulkReview()">✓ 一括 review</button>
+        <button class="tree-btn tree-btn-clear" onclick="bulkClear()">✗ 一括 clear</button>
+      </div>
+      <div class="tree-multiselect-list">
+        ${selected.map(n => `
+          <span class="tree-tag" style="background:${prefixColor(n.prefix)};cursor:pointer"
+                onclick="treeState.selectedUids.delete('${n.uid}');
+                         treeState.selectedUids.size>0
+                           ? (showMultiSelectPanelGlobal(),highlightMultiSelect(treeState.selectedUids))
+                           : clearMultiSelect()"
+                title="クリックで選択解除">${h(n.uid)}</span>
+        `).join('')}
+      </div>
+      <div style="padding:6px 14px">
+        <button class="tree-btn tree-btn-sm" onclick="clearMultiSelect()">選択解除</button>
+      </div>
+    `;
+    // Expose so the onclick attribute above can call it
+    window._treeHighlightMultiSelect = highlightMultiSelect;
+  }
+
+  // Store reference for global access (onclick handlers in panel HTML need it)
+  window.showMultiSelectPanelGlobal = () => showMultiSelectPanel(treeState.selectedUids);
+
+  // ── Rubber-band selection (Shift+drag on SVG background) ───────────
+  let rbOrigin = null, rbRect = null;
+
+  svg.on('mousedown.rb', (event) => {
+    if (!event.shiftKey || event.button !== 0) return;
+    // Only on SVG background, not on nodes/edges
+    if (event.target !== svg.node() && !event.target.closest('.tree-root') &&
+        event.target.tagName !== 'svg') return;
+    event.preventDefault();
+    const [ox, oy] = d3.pointer(event);
+    rbOrigin = [ox, oy];
+    rbRect = svg.append('rect')
+      .attr('class', 'tree-select-rect')
+      .attr('x', ox).attr('y', oy).attr('width', 0).attr('height', 0);
+  });
+
+  svg.on('mousemove.rb', (event) => {
+    if (!rbOrigin || !rbRect) return;
+    const [mx, my] = d3.pointer(event);
+    rbRect
+      .attr('x', Math.min(rbOrigin[0], mx))
+      .attr('y', Math.min(rbOrigin[1], my))
+      .attr('width', Math.abs(mx - rbOrigin[0]))
+      .attr('height', Math.abs(my - rbOrigin[1]));
+  });
+
+  svg.on('mouseup.rb', (event) => {
+    if (!rbOrigin || !rbRect) return;
+    const [mx, my] = d3.pointer(event);
+    const rx = Math.min(rbOrigin[0], mx), ry = Math.min(rbOrigin[1], my);
+    const rw = Math.abs(mx - rbOrigin[0]), rh = Math.abs(my - rbOrigin[1]);
+    rbRect.remove(); rbRect = null; rbOrigin = null;
+
+    if (rw < 5 && rh < 5) return; // treat as click, not drag
+
+    // Convert screen coords to graph coords (accounting for zoom/pan)
+    const t = d3.zoomTransform(svg.node());
+    const gx = (rx - t.x) / t.k, gy = (ry - t.y) / t.k;
+    const gw = rw / t.k,         gh = rh / t.k;
+
+    const selected = nodes.filter(n => {
+      const pos = positions[n.uid];
+      return pos && pos.x >= gx && pos.x <= gx + gw && pos.y >= gy && pos.y <= gy + gh;
+    });
+    if (!selected.length) return;
+
+    treeState.selectedUids = new Set(selected.map(n => n.uid));
+    treeState.selectedNode = null;
+    d3.selectAll('.tree-node').classed('tree-node-selected', false);
+    clearNodeHighlight();
+    showMultiSelectPanel(treeState.selectedUids);
+    highlightMultiSelect(treeState.selectedUids);
+  });
+
+  // Layer labels
+  orderedLayers.forEach((layer, li) => {
+    g.append('text')
+      .attr('x', colWidth * (li + 1))
+      .attr('y', 24)
+      .attr('text-anchor', 'middle')
+      .attr('class', 'tree-layer-label')
+      .attr('fill', prefixColor(layer))
+      .text(layer);
+  });
+
+  // Edges (draw first so they're behind nodes)
+  const edgeGroup = g.append('g').attr('class', 'tree-edges');
+
+  const hw = NODE_W / 2, hh = NODE_H / 2;
+
+  // Pre-compute per-edge port offsets to spread parallel edges at each node
+  const edgePorts = (() => {
+    const srcEdges = {}, dstEdges = {};
+    edges.forEach(e => {
+      (srcEdges[e.parent] = srcEdges[e.parent] || []).push(e);
+      (dstEdges[e.child]  = dstEdges[e.child]  || []).push(e);
+    });
+    // Sort edges at each port top-to-bottom by the Y of the connected node
+    Object.keys(srcEdges).forEach(uid => {
+      srcEdges[uid].sort((a, b) => ((positions[a.child] || {}).y || 0) - ((positions[b.child] || {}).y || 0));
+    });
+    Object.keys(dstEdges).forEach(uid => {
+      dstEdges[uid].sort((a, b) => ((positions[a.parent] || {}).y || 0) - ((positions[b.parent] || {}).y || 0));
+    });
+    const portMap = {};
+    edges.forEach(e => {
+      const key = `${e.parent}|${e.child}`;
+      const sl = srcEdges[e.parent] || [], si = sl.indexOf(e), sn = sl.length;
+      const dl = dstEdges[e.child]  || [], di = dl.indexOf(e), dn = dl.length;
+      portMap[key] = {
+        srcOffset: sn > 1 ? ((si / (sn - 1)) - 0.5) * NODE_H * 0.7 : 0,
+        dstOffset: dn > 1 ? ((di / (dn - 1)) - 0.5) * NODE_H * 0.7 : 0,
+      };
+    });
+    return portMap;
+  })();
+
+  edges.forEach(e => {
+    const p1 = positions[e.parent];
+    const p2 = positions[e.child];
+    if (!p1 || !p2) return;
+
+    const port = edgePorts[`${e.parent}|${e.child}`] || { srcOffset: 0, dstOffset: 0 };
+    const x1 = p1.x + hw, y1 = p1.y + port.srcOffset;
+    const x2 = p2.x - hw, y2 = p2.y + port.dstOffset;
+    const midX = (x1 + x2) / 2;
+
+    const path = edgeGroup.append('path')
+      .attr('d', `M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}`)
+      .attr('class', 'tree-edge' + (e.suspect ? ' tree-edge-suspect' : ''))
+      .attr('data-parent', e.parent)
+      .attr('data-child', e.child)
+      .attr('marker-end', 'url(#arrowhead)');
+
+    // Right-click to unlink
+    path.on('contextmenu', (event) => {
+      event.preventDefault();
+      showTreeContextMenu(event, e.child, e.parent);
+    });
+
+    // Hover highlight
+    path.on('mouseenter', () => path.classed('tree-edge-hover', true))
+      .on('mouseleave', () => path.classed('tree-edge-hover', false));
+  });
+
+  // Arrow marker
+  svg.append('defs').append('marker')
+    .attr('id', 'arrowhead')
+    .attr('viewBox', '0 0 10 6')
+    .attr('refX', 10).attr('refY', 3)
+    .attr('markerWidth', 8).attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L10,3 L0,6 Z').attr('fill', '#999');
+
+  // Drag-line marker (for creating links)
+  svg.select('defs').append('marker')
+    .attr('id', 'arrowhead-drag')
+    .attr('viewBox', '0 0 10 6')
+    .attr('refX', 10).attr('refY', 3)
+    .attr('markerWidth', 8).attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L10,3 L0,6 Z').attr('fill', '#4a90d9');
+
+  // Active edge marker (blue arrowhead for highlighted edges)
+  svg.select('defs').append('marker')
+    .attr('id', 'arrowhead-active')
+    .attr('viewBox', '0 0 10 6')
+    .attr('refX', 10).attr('refY', 3)
+    .attr('markerWidth', 8).attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L10,3 L0,6 Z').attr('fill', '#4a90d9');
+
+  // Highlight edges and neighbor nodes connected to a given uid
+  function highlightNodeConnections(uid) {
+    // Collect UIDs of directly connected neighbors
+    const neighborUids = new Set();
+    edges.forEach(e => {
+      if (e.parent === uid) neighborUids.add(e.child);
+      if (e.child === uid)  neighborUids.add(e.parent);
+    });
+
+    // Dim / activate edges
+    d3.selectAll('.tree-edge').each(function() {
+      const el = d3.select(this);
+      const isActive = el.attr('data-parent') === uid || el.attr('data-child') === uid;
+      el.classed('tree-edge-active', isActive)
+        .classed('tree-edge-dimmed', !isActive)
+        .attr('marker-end', isActive ? 'url(#arrowhead-active)' : 'url(#arrowhead)');
+    });
+
+    // Dim / highlight nodes
+    d3.selectAll('.tree-node-group').each(function() {
+      const el = d3.select(this);
+      const nodeUid = el.attr('data-uid');
+      const isSelected = nodeUid === uid;
+      const isNeighbor = neighborUids.has(nodeUid);
+      el.classed('tree-group-dimmed', !isSelected && !isNeighbor)
+        .classed('tree-node-neighbor', isNeighbor);
+    });
+  }
+
+  // Clear all highlight state (called on deselect)
+  function clearNodeHighlight() {
+    d3.selectAll('.tree-edge')
+      .classed('tree-edge-active', false)
+      .classed('tree-edge-dimmed', false)
+      .attr('marker-end', 'url(#arrowhead)');
+    d3.selectAll('.tree-node-group')
+      .classed('tree-group-dimmed', false)
+      .classed('tree-node-neighbor', false);
+  }
+
+  // Nodes
+  const nodeGroup = g.append('g').attr('class', 'tree-nodes');
+
+  nodes.forEach(n => {
+    const pos = positions[n.uid];
+    if (!pos) return;
+
+    const ng = nodeGroup.append('g')
+      .attr('transform', `translate(${pos.x - hw}, ${pos.y - hh})`)
+      .attr('class', 'tree-node-group')
+      .attr('data-uid', n.uid);
+
+    // Node rectangle
+    const isCenter = n.uid === centerUid;
+    const suspectStroke = n.suspect ? '#ef4444' : prefixColor(n.prefix);
+    ng.append('rect')
+      .attr('width', NODE_W)
+      .attr('height', NODE_H)
+      .attr('rx', 7)
+      .attr('class', 'tree-node' +
+        (isCenter ? ' tree-node-center' : '') +
+        (!n.normative ? ' tree-node-dim' : ''))
+      .attr('fill', n.reviewed ? '#fff' : '#f7f8fc')
+      .attr('stroke', suspectStroke)
+      .attr('stroke-width', isCenter ? 3 : (n.suspect ? 2 : 1.5));
+
+    // Prefix badge (top-left)
+    const badgeW = 40, badgeH = 17;
+    ng.append('rect')
+      .attr('x', 5).attr('y', 5)
+      .attr('width', badgeW).attr('height', badgeH)
+      .attr('rx', 4)
+      .attr('fill', prefixColor(n.prefix));
+    ng.append('text')
+      .attr('x', 5 + badgeW / 2).attr('y', 16)
+      .attr('text-anchor', 'middle')
+      .attr('font-size', '9').attr('font-weight', '700')
+      .attr('fill', '#fff').attr('pointer-events', 'none')
+      .text(n.prefix.length > 6 ? n.prefix.slice(0, 5) + '…' : n.prefix);
+
+    // Status icon (top-right)
+    if (n.suspect) {
+      ng.append('text').attr('x', NODE_W - 10).attr('y', 17)
+        .attr('text-anchor', 'middle').attr('class', 'tree-status-icon').text('⚠');
+    } else if (n.reviewed) {
+      ng.append('text').attr('x', NODE_W - 10).attr('y', 17)
+        .attr('text-anchor', 'middle').attr('class', 'tree-status-icon tree-status-ok').text('✓');
+    }
+
+    // UID text (center)
+    ng.append('text')
+      .attr('x', hw).attr('y', 37)
+      .attr('text-anchor', 'middle')
+      .attr('class', 'tree-node-uid')
+      .text(n.uid);
+
+    // Header text (bottom, truncated to ~22 chars)
+    const headerTxt = n.header
+      ? (n.header.length > 22 ? n.header.slice(0, 21) + '…' : n.header)
+      : '';
+    if (headerTxt) {
+      ng.append('text')
+        .attr('x', hw).attr('y', 52)
+        .attr('text-anchor', 'middle')
+        .attr('class', 'tree-node-header')
+        .text(headerTxt);
+    }
+
+    // Connector circle (right edge, for dragging to create links)
+    ng.append('circle')
+      .attr('cx', NODE_W).attr('cy', hh)
+      .attr('r', 6)
+      .attr('class', 'tree-connector')
+      .attr('fill', prefixColor(n.prefix));
+
+    // Hover tooltip
+    ng.on('mouseenter', (event) => {
+      const tip = document.getElementById('tree-tooltip');
+      if (!tip) return;
+      const suspectTag = n.suspect ? '<span style="color:#fca5a5">⚠ suspect</span>' : '';
+      const reviewedTag = n.reviewed ? '<span style="color:#6ee7b7">✓ reviewed</span>' : '';
+      tip.innerHTML = `
+        <div class="tree-tooltip-uid">${h(n.uid)}</div>
+        ${n.header ? `<div class="tree-tooltip-hdr">${h(n.header)}</div>` : ''}
+        ${(suspectTag || reviewedTag) ? `<div class="tree-tooltip-tags">${suspectTag}${reviewedTag}</div>` : ''}
+      `;
+      tip.style.display = 'block';
+      tip.style.left = (event.pageX + 16) + 'px';
+      tip.style.top = (event.pageY - 12) + 'px';
+    })
+    .on('mousemove', (event) => {
+      const tip = document.getElementById('tree-tooltip');
+      if (tip) { tip.style.left = (event.pageX + 16) + 'px'; tip.style.top = (event.pageY - 12) + 'px'; }
+    })
+    .on('mouseleave', () => {
+      const tip = document.getElementById('tree-tooltip');
+      if (tip) tip.style.display = 'none';
+    });
+
+    // Click → single select / Shift+click → multi-select toggle
+    ng.on('click', (event) => {
+      event.stopPropagation();
+
+      if (event.shiftKey) {
+        // Toggle node in multi-selection
+        treeState.selectedNode = null;
+        if (treeState.selectedUids.has(n.uid)) {
+          treeState.selectedUids.delete(n.uid);
+        } else {
+          treeState.selectedUids.add(n.uid);
+        }
+        d3.selectAll('.tree-node').classed('tree-node-selected', false);
+        clearNodeHighlight();
+        if (treeState.selectedUids.size > 0) {
+          showMultiSelectPanel(treeState.selectedUids);
+          highlightMultiSelect(treeState.selectedUids);
+        } else {
+          d3.selectAll('.tree-node').classed('tree-node-multiselected', false);
+          const panel = document.getElementById('tree-side-panel');
+          if (panel) panel.innerHTML = '<div class="tree-side-empty"><p>ノードをクリックして詳細を表示</p></div>';
+        }
+        return;
+      }
+
+      // Normal single click — clear multi-select
+      treeState.selectedUids = new Set();
+      d3.selectAll('.tree-node').classed('tree-node-selected', false).classed('tree-node-multiselected', false);
+      ng.select('.tree-node').classed('tree-node-selected', true);
+      highlightNodeConnections(n.uid);
+      selectTreeNode(n.uid, data);
+    });
+
+    // Double-click → navigate to item detail
+    ng.on('dblclick', (event) => {
+      event.stopPropagation();
+      location.hash = '#/item/' + n.uid;
+    });
+
+    // Right-click → node context menu
+    ng.on('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showNodeContextMenu(event, n.uid, n.reviewed, n.suspect);
+    });
+
+    // Drag from connector → create link
+    const connector = ng.select('.tree-connector');
+    connector.call(d3.drag()
+      .on('start', function(event) {
+        event.sourceEvent.stopPropagation();
+        treeState.dragSource = n.uid;
+        treeState.dragLine = g.append('line')
+          .attr('class', 'tree-drag-line')
+          .attr('x1', pos.x + hw).attr('y1', pos.y)
+          .attr('x2', pos.x + hw).attr('y2', pos.y)
+          .attr('marker-end', 'url(#arrowhead-drag)');
+      })
+      .on('drag', function(event) {
+        if (treeState.dragLine) {
+          const t = d3.zoomTransform(svg.node());
+          const mx = (event.sourceEvent.offsetX - t.x) / t.k;
+          const my = (event.sourceEvent.offsetY - t.y) / t.k;
+          treeState.dragLine.attr('x2', mx).attr('y2', my);
+        }
+      })
+      .on('end', function(event) {
+        if (treeState.dragLine) { treeState.dragLine.remove(); treeState.dragLine = null; }
+        const t = d3.zoomTransform(svg.node());
+        const mx = (event.sourceEvent.offsetX - t.x) / t.k;
+        const my = (event.sourceEvent.offsetY - t.y) / t.k;
+        let targetUid = null;
+        nodes.forEach(tn => {
+          const tp = positions[tn.uid];
+          if (!tp) return;
+          if (mx >= tp.x - hw && mx <= tp.x + hw && my >= tp.y - hh && my <= tp.y + hh) {
+            targetUid = tn.uid;
+          }
+        });
+        if (targetUid && targetUid !== treeState.dragSource) {
+          createTreeLink(treeState.dragSource, targetUid);
+        }
+        treeState.dragSource = null;
+      })
+    );
+  });
+
+  // Click empty space to deselect (Shift+click on background handled by rubber-band)
+  svg.on('click', (event) => {
+    if (event.shiftKey) return; // let rubber-band handle it
+    treeState.selectedUids = new Set();
+    d3.selectAll('.tree-node').classed('tree-node-selected', false).classed('tree-node-multiselected', false);
+    clearNodeHighlight();
+    const panel = document.getElementById('tree-side-panel');
+    if (panel) panel.innerHTML = '<div class="tree-side-empty"><p>ノードをクリックして詳細を表示</p></div>';
+    hideTreeContextMenu();
+  });
+
+  // Auto-fit helper
+  function fitAll() {
+    const xs = nodes.map(n => positions[n.uid]?.x).filter(v => v != null);
+    const ys = nodes.map(n => positions[n.uid]?.y).filter(v => v != null);
+    if (!xs.length) return;
+    const minX = Math.min(...xs) - hw - 16;
+    const maxX = Math.max(...xs) + hw + 16;
+    const minY = Math.min(...ys) - hh - 16;
+    const maxY = Math.max(...ys) + hh + 16;
+    const bw = maxX - minX, bh = maxY - minY;
+    const scale = Math.min(width / bw, height / bh, 1.5) * 0.9;
+    const tx = (width - bw * scale) / 2 - minX * scale;
+    const ty = (height - bh * scale) / 2 - minY * scale;
+    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  }
+
+  document.getElementById('tree-zoom-fit').addEventListener('click', fitAll);
+  document.getElementById('tree-zoom-reset').addEventListener('click', () => {
+    svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+  });
+
+  // Initial fit — ズーム位置が保存されていれば復元、なければ全体フィット
+  if (treeState.savedZoomTransform) {
+    svg.call(zoom.transform, treeState.savedZoomTransform);
+    treeState.savedZoomTransform = null;
+  } else {
+    fitAll();
+  }
+}
+
+function selectTreeNode(uid, graphData) {
+  hideTreeContextMenu();
+  const panel = document.getElementById('tree-side-panel');
+  if (!panel) return;
+  const node = graphData.nodes.find(n => n.uid === uid);
+  if (!node) return;
+
+  const parents = graphData.edges.filter(e => e.child === uid).map(e => {
+    const pn = graphData.nodes.find(n => n.uid === e.parent);
+    return { uid: e.parent, suspect: e.suspect, header: pn ? pn.header : '' };
+  });
+  const children = graphData.edges.filter(e => e.parent === uid).map(e => {
+    const cn = graphData.nodes.find(n => n.uid === e.child);
+    return { uid: e.child, suspect: e.suspect, header: cn ? cn.header : '' };
+  });
+
+  const mkLink = (l, selfUid, isParent) => `
+    <div class="tree-link-item">
+      <span class="tree-link-uid" onclick="treeState.selectedNode='${l.uid}';location.hash='#/tree/${l.uid}'">${h(l.uid)}</span>
+      <span class="tree-dim">${h(l.header)}</span>
+      ${l.suspect ? '<span class="tree-tag tree-tag-suspect" style="flex-shrink:0">!</span>' : ''}
+      <button class="tree-unlink-btn" title="リンク削除"
+        onclick="${isParent ? `removeTreeLink('${selfUid}','${l.uid}')` : `removeTreeLink('${l.uid}','${selfUid}')`}">&times;</button>
+    </div>`;
+
+  panel.innerHTML = `
+    <div class="tree-detail-header">
+      <span class="tree-detail-uid">${h(uid)}</span>
+      <span class="tree-detail-hdr">${h(node.header || '')}</span>
+      <div class="tree-detail-tags">
+        <span class="tree-tag" style="background:${prefixColor(node.prefix)}">${h(node.prefix)}</span>
+        ${node.suspect ? '<span class="tree-tag tree-tag-suspect">suspect</span>' : ''}
+        ${node.reviewed
+          ? '<span class="tree-tag tree-tag-reviewed">reviewed</span>'
+          : '<span class="tree-tag" style="background:#9ca3af">unreviewed</span>'}
+      </div>
+    </div>
+    <div class="tree-detail-actions">
+      <button class="tree-btn tree-btn-sm" onclick="treeState.selectedNode='${uid}';location.hash='#/tree/${uid}'">中心に設定</button>
+      <button class="tree-btn tree-btn-sm" onclick="location.hash='#/item/${uid}'">詳細を開く</button>
+    </div>
+    <div class="tree-detail-links">
+      <div class="tree-detail-section">
+        <h4>親リンク (${parents.length})</h4>
+        ${parents.length === 0
+          ? '<span class="tree-dim">なし</span>'
+          : parents.map(p => mkLink(p, uid, true)).join('')}
+        <div class="tree-add-link-row">
+          <input type="text" id="tree-add-parent-input" placeholder="親UID を入力..." class="tree-add-input">
+          <button class="tree-btn tree-btn-sm" onclick="addTreeLinkFromInput('${uid}')">追加</button>
+        </div>
+      </div>
+      <div class="tree-detail-section">
+        <h4>子リンク (${children.length})</h4>
+        ${children.length === 0
+          ? '<span class="tree-dim">なし</span>'
+          : children.map(c => mkLink(c, uid, false)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function showNodeContextMenu(event, uid, reviewed, suspect) {
+  hideTreeContextMenu();
+  const menu = document.getElementById('tree-context-menu');
+  if (!menu) return;
+
+  const isInSel  = treeState.selectedUids.has(uid);
+  const selCount = treeState.selectedUids.size;
+
+  const suspectSection = suspect ? `
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-label">Suspect</div>
+    <div class="tree-ctx-item" data-action="clear-suspect">⚠ suspect をクリア</div>
+  ` : '';
+
+  const bulkSection = selCount > 0 ? `
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-label">${selCount} 件選択中</div>
+    <div class="tree-ctx-item" data-action="bulk-review">✓ 一括 review</div>
+    <div class="tree-ctx-item" data-action="bulk-clear">✗ 一括 clear</div>
+  ` : '';
+
+  menu.innerHTML = `
+    <div class="tree-ctx-label">${h(uid)}</div>
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-item" data-action="open-detail">詳細を開く</div>
+    <div class="tree-ctx-item" data-action="set-center">中心に設定</div>
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-label">レビュー</div>
+    <div class="tree-ctx-item ${reviewed ? 'tree-ctx-item-disabled' : ''}" data-action="review">✓ レビュー済みにする</div>
+    <div class="tree-ctx-item ${!reviewed ? 'tree-ctx-item-disabled' : ''}" data-action="clear-review">✗ 未レビューにする</div>
+    ${suspectSection}
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-item" data-action="${isInSel ? 'sel-remove' : 'sel-add'}">${isInSel ? '選択から除外' : '選択に追加'}</div>
+    ${bulkSection}
+  `;
+
+  // Event delegation — no inline onclick
+  function menuClickHandler(e) {
+    const item = e.target.closest('[data-action]');
+    if (!item || item.classList.contains('tree-ctx-item-disabled')) return;
+    menu.removeEventListener('click', menuClickHandler);
+    hideTreeContextMenu();
+    switch (item.dataset.action) {
+      case 'open-detail':   location.hash = `#/item/${uid}`; break;
+      case 'set-center':    treeState.selectedNode = uid; location.hash = `#/tree/${uid}`; break;
+      case 'review':        reviewNode(uid); break;
+      case 'clear-review':  clearNode(uid); break;
+      case 'clear-suspect': clearSuspectNode(uid); break;
+      case 'sel-add':
+        treeState.selectedUids.add(uid);
+        showMultiSelectPanelGlobal();
+        if (window._treeHighlightMultiSelect) _treeHighlightMultiSelect(treeState.selectedUids);
+        break;
+      case 'sel-remove':
+        treeState.selectedUids.delete(uid);
+        if (treeState.selectedUids.size > 0) {
+          showMultiSelectPanelGlobal();
+          if (window._treeHighlightMultiSelect) _treeHighlightMultiSelect(treeState.selectedUids);
+        } else {
+          clearMultiSelect();
+        }
+        break;
+      case 'bulk-review': bulkReview(); break;
+      case 'bulk-clear':  bulkClear();  break;
+    }
+  }
+  menu.addEventListener('click', menuClickHandler);
+
+  // Position — use clientX/Y for position:fixed, measure after display:block
+  menu.style.display = 'block';
+  const mw = 220, mh = menu.scrollHeight;
+  const left = event.clientX + mw > window.innerWidth  ? event.clientX - mw : event.clientX;
+  const top  = event.clientY + mh > window.innerHeight ? event.clientY - mh : event.clientY;
+  menu.style.left = left + 'px';
+  menu.style.top  = top  + 'px';
+
+  setTimeout(() => document.addEventListener('click', hideTreeContextMenu, { once: true }), 0);
+}
+
+function saveZoomTransform() {
+  const svgEl = document.querySelector('.tree-svg');
+  if (svgEl) treeState.savedZoomTransform = d3.zoomTransform(svgEl);
+}
+
+async function reviewNode(uid) {
+  hideTreeContextMenu();
+  const res = await API.post(`/api/items/${uid}/review`, {});
+  if (res.error) toast(res.error, 'error');
+  else { toast(`${uid} をレビュー済みにしました`, 'success'); saveZoomTransform(); treeState.graphData = null; refreshCurrentView(); }
+}
+
+async function clearNode(uid) {
+  hideTreeContextMenu();
+  const res = await API.post(`/api/items/${uid}/unreview`, {});
+  if (res.error) toast(res.error, 'error');
+  else { toast(`${uid} のレビューを取り消しました`, 'success'); saveZoomTransform(); treeState.graphData = null; refreshCurrentView(); }
+}
+
+async function clearSuspectNode(uid) {
+  hideTreeContextMenu();
+  const res = await API.post(`/api/items/${uid}/clear`, {});
+  if (res.error) toast(res.error, 'error');
+  else { toast(`${uid} の suspect をクリアしました`, 'success'); saveZoomTransform(); treeState.graphData = null; refreshCurrentView(); }
+}
+
+function showTreeContextMenu(event, childUid, parentUid) {
+  hideTreeContextMenu();
+  const menu = document.getElementById('tree-context-menu');
+  menu.innerHTML = `
+    <div class="tree-ctx-label">エッジ</div>
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-item" data-action="focus-child">${h(childUid)} を中心に表示</div>
+    <div class="tree-ctx-item" data-action="focus-parent">${h(parentUid)} を中心に表示</div>
+    <div class="tree-ctx-sep"></div>
+    <div class="tree-ctx-item tree-ctx-item-danger" data-action="remove-link">
+      リンク削除: ${h(childUid)} &rarr; ${h(parentUid)}
+    </div>
+  `;
+
+  menu.addEventListener('click', function handler(e) {
+    const item = e.target.closest('[data-action]');
+    if (!item) return;
+    menu.removeEventListener('click', handler);
+    hideTreeContextMenu();
+    switch (item.dataset.action) {
+      case 'focus-child':  treeState.selectedNode = childUid; location.hash = `#/tree/${childUid}`; break;
+      case 'focus-parent': treeState.selectedNode = parentUid; location.hash = `#/tree/${parentUid}`; break;
+      case 'remove-link':  removeTreeLink(childUid, parentUid); break;
+    }
+  });
+
+  menu.style.display = 'block';
+  const mw = 240, mh = menu.scrollHeight;
+  const left = event.clientX + mw > window.innerWidth  ? event.clientX - mw : event.clientX;
+  const top  = event.clientY + mh > window.innerHeight ? event.clientY - mh : event.clientY;
+  menu.style.left = left + 'px';
+  menu.style.top  = top  + 'px';
+
+  setTimeout(() => document.addEventListener('click', hideTreeContextMenu, { once: true }), 0);
+}
+
+function hideTreeContextMenu() {
+  const menu = document.getElementById('tree-context-menu');
+  if (menu) menu.style.display = 'none';
+}
+
+// ===================================================================
+// Bulk review / clear (multi-select operations)
+// ===================================================================
+async function bulkReview() {
+  const uids = [...treeState.selectedUids];
+  if (!uids.length) return;
+  let ok = 0, fail = 0;
+  for (const uid of uids) {
+    try {
+      const res = await API.post(`/api/items/${uid}/review`, {});
+      if (res.error) fail++; else ok++;
+    } catch { fail++; }
+  }
+  toast(
+    `${ok} 件をレビュー済みにしました${fail > 0 ? `（${fail} 件失敗）` : ''}`,
+    fail > 0 ? 'error' : 'success'
+  );
+  saveZoomTransform(); treeState.graphData = null;
+  await refreshCurrentView();
+}
+
+async function bulkClear() {
+  const uids = [...treeState.selectedUids];
+  if (!uids.length) return;
+  let ok = 0;
+  const errors = [];
+  for (const uid of uids) {
+    try {
+      const res = await API.post(`/api/items/${uid}/unreview`, {});
+      if (res.error) errors.push(`${uid}: ${res.error}`); else ok++;
+    } catch (e) { errors.push(`${uid}: ${e.message}`); }
+  }
+  if (errors.length) {
+    toast(`${ok} 件クリア、${errors.length} 件失敗: ${errors[0]}`, 'error');
+  } else {
+    toast(`${ok} 件のレビューをクリアしました`, 'success');
+  }
+  saveZoomTransform(); treeState.graphData = null;
+  await refreshCurrentView();
+}
+
+function clearMultiSelect() {
+  treeState.selectedUids = new Set();
+  d3.selectAll('.tree-node')
+    .classed('tree-node-multiselected', false)
+    .classed('tree-node-selected', false);
+  if (typeof clearNodeHighlight === 'function') clearNodeHighlight();
+  // clear highlight via D3 (works even outside renderTreeSVG scope)
+  d3.selectAll('.tree-node-group').classed('tree-group-dimmed', false);
+  d3.selectAll('.tree-edge').classed('tree-edge-dimmed', false).classed('tree-edge-active', false)
+    .attr('marker-end', 'url(#arrowhead)');
+  const panel = document.getElementById('tree-side-panel');
+  if (panel) panel.innerHTML = '<div class="tree-side-empty"><p>ノードをクリックして詳細を表示</p></div>';
+}
+
+async function createTreeLink(sourceUid, targetUid) {
+  // sourceUid = child (drag from), targetUid = parent (drop to)
+  // Confirm direction with user
+  const childUid = sourceUid;
+  const parentUid = targetUid;
+  if (!confirm(`リンクを作成しますか?\n${childUid} → ${parentUid} (子→親)`)) return;
+  try {
+    const res = await API.post(`/api/items/${childUid}/link`, { parent: parentUid });
+    if (res.ok) {
+      toast('リンクを作成しました', 'success');
+      // Re-render
+      if (treeState.selectedNode) {
+        location.hash = '#/tree/' + treeState.selectedNode;
+        renderTreeGraph(treeState.selectedNode);
+      } else {
+        renderTreeGraph('');
+      }
+    } else {
+      toast(res.error || 'エラーが発生しました', 'error');
+    }
+  } catch (e) {
+    toast('リンク作成に失敗しました: ' + e.message, 'error');
+  }
+}
+
+async function removeTreeLink(childUid, parentUid) {
+  hideTreeContextMenu();
+  if (!confirm(`リンクを削除しますか?\n${childUid} → ${parentUid}`)) return;
+  try {
+    const res = await API.post(`/api/items/${childUid}/unlink`, { parent: parentUid });
+    if (res.ok) {
+      toast('リンクを削除しました', 'success');
+      if (treeState.selectedNode) {
+        renderTreeGraph(treeState.selectedNode);
+      } else {
+        renderTreeGraph('');
+      }
+    } else {
+      toast(res.error || 'エラーが発生しました', 'error');
+    }
+  } catch (e) {
+    toast('リンク削除に失敗しました: ' + e.message, 'error');
+  }
+}
+
+async function addTreeLinkFromInput(childUid) {
+  const input = document.getElementById('tree-add-parent-input');
+  const parentUid = input.value.trim();
+  if (!parentUid) return;
+  await createTreeLink(childUid, parentUid);
+}
+
+// ===================================================================
 // Refresh current view after mutation
 // ===================================================================
 async function refreshCurrentView() {
@@ -1569,6 +2747,7 @@ async function refreshCurrentView() {
       break;
     case 'group': renderGroup(decodeURIComponent(currentParam)); break;
     case 'document': renderDocument(decodeURIComponent(currentParam)); break;
+    case 'tree': renderTreeGraph(decodeURIComponent(currentParam)); break;
     case 'validation': renderValidation(); break;
   }
 }
